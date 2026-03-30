@@ -1,10 +1,14 @@
 package freshness
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"time"
+	"slices"
+	"strings"
 
 	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/state"
@@ -21,50 +25,34 @@ type EcosystemDecision struct {
 	Ecosystem string
 	Decision  Decision
 	Reason    string
-	MaxMTime  time.Time
+	Lockfiles map[string]string
 }
 
 func Evaluate(dir string, detections []detection.DetectionResult, current state.FileState) ([]EcosystemDecision, error) {
 	decisions := make([]EcosystemDecision, 0, len(detections))
 
 	for _, result := range detections {
-		maxMTime, err := maxMatchedMTime(dir, result.MatchedFiles)
+		lockfiles, err := hashMatchedFiles(dir, result.MatchedFiles)
 		if err != nil {
 			return nil, err
 		}
 
 		ecosystem := string(result.Ecosystem)
-		lastRaw, hasState := "", false
-		if ecosystemState, ok := current.Ecosystems[ecosystem]; ok {
-			lastRaw = ecosystemState.LastSuccessAt
-			hasState = true
-		}
-
 		decision := EcosystemDecision{
 			Ecosystem: ecosystem,
 			Decision:  DecisionUpdate,
-			Reason:    "missing prior successful run timestamp",
-			MaxMTime:  maxMTime.UTC(),
+			Reason:    "missing prior lockfile hash",
+			Lockfiles: lockfiles,
 		}
 
-		if !hasState || lastRaw == "" {
-			decisions = append(decisions, decision)
-			continue
-		}
-
-		lastSuccess, err := state.ParseRFC3339UTC(lastRaw)
-		if err != nil {
-			decision.Reason = "invalid prior successful run timestamp"
-			decisions = append(decisions, decision)
-			continue
-		}
-
-		lastSuccess = lastSuccess.UTC()
-		if !lastSuccess.Before(maxMTime.UTC()) {
-			decision.Decision = DecisionSkip
-			decision.Reason = "no dependency changes since last successful run"
-		} else {
-			decision.Reason = "dependency files changed since last successful run"
+		ecosystemState, hasState := current.Ecosystems[ecosystem]
+		if hasState && len(ecosystemState.Lockfiles) > 0 {
+			if lockfilesEqual(ecosystemState.Lockfiles, lockfiles) {
+				decision.Decision = DecisionSkip
+				decision.Reason = "dependency lockfiles unchanged since last successful run"
+			} else {
+				decision.Reason = "dependency lockfiles changed since last successful run"
+			}
 		}
 
 		decisions = append(decisions, decision)
@@ -73,20 +61,51 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 	return decisions, nil
 }
 
-func maxMatchedMTime(dir string, matchedFiles []string) (time.Time, error) {
-	var max time.Time
+func hashMatchedFiles(dir string, matchedFiles []string) (map[string]string, error) {
+	lockfiles := make(map[string]string, len(matchedFiles))
 	for _, matchedFile := range matchedFiles {
 		fullPath := filepath.Join(dir, matchedFile)
-		info, err := os.Stat(fullPath)
+		hash, err := hashFile(fullPath)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("stat matched file %q: %w", matchedFile, err)
+			return nil, fmt.Errorf("hash matched file %q: %w", matchedFile, err)
 		}
 
-		modTime := info.ModTime().UTC()
-		if modTime.After(max) {
-			max = modTime
+		lockfiles[strings.ToLower(matchedFile)] = hash
+	}
+
+	return lockfiles, nil
+}
+
+func hashFile(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func lockfilesEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	keys := make([]string, 0, len(a))
+	for key := range a {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+
+	for _, key := range keys {
+		if a[key] != b[key] {
+			return false
 		}
 	}
 
-	return max.UTC(), nil
+	return true
 }

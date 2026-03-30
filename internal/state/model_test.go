@@ -29,9 +29,9 @@ func TestDecodeValidV1State(t *testing.T) {
 
 func TestDecodeVersionGateBehavior(t *testing.T) {
 	cases := []struct {
-		name         string
-		raw          string
-		wantWarning  string
+		name        string
+		raw         string
+		wantWarning string
 	}{
 		{
 			name:        "missing version",

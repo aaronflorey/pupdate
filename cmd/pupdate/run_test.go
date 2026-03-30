@@ -41,6 +41,11 @@ func writeFixtureFiles(t *testing.T, dir string, files ...string) {
 	}
 }
 
+func disableInstall(t *testing.T) {
+	t.Helper()
+	t.Setenv("PUPDATE_SKIP_INSTALL", "1")
+}
+
 func withChdir(t *testing.T, dir string) {
 	t.Helper()
 	cwd, err := os.Getwd()
@@ -65,6 +70,7 @@ func parseRunOutput(t *testing.T, stdout bytes.Buffer) runOutput {
 }
 
 func TestRunOutputsDeterministicMultiEcosystemJSON(t *testing.T) {
+	disableInstall(t)
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir,
 		"bun.lock",
@@ -116,6 +122,7 @@ func TestRunOutputsDeterministicMultiEcosystemJSON(t *testing.T) {
 }
 
 func TestRunReturnsDetectionFailedPrefixOnDetectorError(t *testing.T) {
+	disableInstall(t)
 	t.Cleanup(func() {
 		detectFn = detection.Detect
 	})
@@ -144,6 +151,7 @@ func TestRunReturnsDetectionFailedPrefixOnDetectorError(t *testing.T) {
 }
 
 func TestRunOutputIncludesMatchedFilesFieldPerEcosystem(t *testing.T) {
+	disableInstall(t)
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "composer.lock", "go.mod")
 	withChdir(t, dir)
@@ -175,6 +183,7 @@ func TestRunOutputIncludesMatchedFilesFieldPerEcosystem(t *testing.T) {
 }
 
 func TestRunOutputHasNoWarningsForSingleLockfile(t *testing.T) {
+	disableInstall(t)
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "go.mod")
 	withChdir(t, dir)
@@ -199,6 +208,7 @@ func TestRunOutputHasNoWarningsForSingleLockfile(t *testing.T) {
 }
 
 func TestRunOutputIncludesNodeManagers(t *testing.T) {
+	disableInstall(t)
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "bun.lock", "package-lock.json")
 	withChdir(t, dir)

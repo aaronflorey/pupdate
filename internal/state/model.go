@@ -16,7 +16,8 @@ type FileState struct {
 }
 
 type EcosystemState struct {
-	LastSuccessAt string `json:"last_success_at"`
+	LastSuccessAt string            `json:"last_success_at"`
+	Lockfiles     map[string]string `json:"lockfiles,omitempty"`
 }
 
 func Empty() FileState {
@@ -41,6 +42,12 @@ func Decode(raw []byte) (FileState, []string, error) {
 	if decoded.Ecosystems == nil {
 		decoded.Ecosystems = map[string]EcosystemState{}
 	}
+	for key, ecosystem := range decoded.Ecosystems {
+		if ecosystem.Lockfiles == nil {
+			ecosystem.Lockfiles = map[string]string{}
+			decoded.Ecosystems[key] = ecosystem
+		}
+	}
 
 	return decoded, nil, nil
 }
@@ -51,6 +58,12 @@ func Encode(state FileState) ([]byte, error) {
 	}
 	if state.Ecosystems == nil {
 		state.Ecosystems = map[string]EcosystemState{}
+	}
+	for key, ecosystem := range state.Ecosystems {
+		if ecosystem.Lockfiles == nil {
+			ecosystem.Lockfiles = map[string]string{}
+			state.Ecosystems[key] = ecosystem
+		}
 	}
 	return json.Marshal(state)
 }

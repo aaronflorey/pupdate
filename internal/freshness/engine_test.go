@@ -1,10 +1,11 @@
 package freshness
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/state"
@@ -12,8 +13,7 @@ import (
 
 func TestEvaluateNoStateRuns(t *testing.T) {
 	dir := t.TempDir()
-	mtime := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
-	writeFileWithMTime(t, dir, "package-lock.json", mtime)
+	writeFile(t, dir, "package-lock.json", "one")
 
 	results, err := Evaluate(
 		dir,
@@ -37,14 +37,18 @@ func TestEvaluateNoStateRuns(t *testing.T) {
 	}
 }
 
-func TestEvaluateOlderStateRuns(t *testing.T) {
+func TestEvaluateChangedLockfileRuns(t *testing.T) {
 	dir := t.TempDir()
-	mtime := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
-	writeFileWithMTime(t, dir, "go.mod", mtime)
+	writeFile(t, dir, "go.mod", "one")
+	oldHash := hashText("one")
+	writeFile(t, dir, "go.mod", "two")
 
 	current := state.Empty()
 	current.Ecosystems["go"] = state.EcosystemState{
-		LastSuccessAt: state.FormatRFC3339UTC(mtime.Add(-time.Hour)),
+		LastSuccessAt: "2026-03-01T12:00:00Z",
+		Lockfiles: map[string]string{
+			"go.mod": oldHash,
+		},
 	}
 
 	results, err := Evaluate(
@@ -66,14 +70,17 @@ func TestEvaluateOlderStateRuns(t *testing.T) {
 	}
 }
 
-func TestEvaluateEqualOrNewerStateSkips(t *testing.T) {
+func TestEvaluateEqualHashesSkips(t *testing.T) {
 	dir := t.TempDir()
-	mtime := time.Date(2026, 3, 1, 14, 0, 0, 0, time.UTC)
-	writeFileWithMTime(t, dir, "Cargo.toml", mtime)
+	writeFile(t, dir, "Cargo.toml", "same")
+	currentHash := hashText("same")
 
 	equalState := state.Empty()
 	equalState.Ecosystems["rust"] = state.EcosystemState{
-		LastSuccessAt: state.FormatRFC3339UTC(mtime),
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"cargo.toml": currentHash,
+		},
 	}
 
 	equalResults, err := Evaluate(
@@ -90,41 +97,23 @@ func TestEvaluateEqualOrNewerStateSkips(t *testing.T) {
 		t.Fatalf("Evaluate (equal) returned error: %v", err)
 	}
 	if equalResults[0].Decision != DecisionSkip {
-		t.Fatalf("expected DecisionSkip for equal timestamp, got %q", equalResults[0].Decision)
-	}
-
-	newerState := state.Empty()
-	newerState.Ecosystems["rust"] = state.EcosystemState{
-		LastSuccessAt: state.FormatRFC3339UTC(mtime.Add(time.Minute)),
-	}
-	newerResults, err := Evaluate(
-		dir,
-		[]detection.DetectionResult{
-			{
-				Ecosystem:    detection.EcosystemRust,
-				MatchedFiles: []string{"Cargo.toml"},
-			},
-		},
-		newerState,
-	)
-	if err != nil {
-		t.Fatalf("Evaluate (newer) returned error: %v", err)
-	}
-	if newerResults[0].Decision != DecisionSkip {
-		t.Fatalf("expected DecisionSkip for newer timestamp, got %q", newerResults[0].Decision)
+		t.Fatalf("expected DecisionSkip for equal hash, got %q", equalResults[0].Decision)
 	}
 }
 
-func TestEvaluateUsesMaxMatchedFileMTime(t *testing.T) {
+func TestEvaluateDetectsAnyLockfileChange(t *testing.T) {
 	dir := t.TempDir()
-	oldTime := time.Date(2026, 3, 1, 8, 0, 0, 0, time.UTC)
-	newTime := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
-	writeFileWithMTime(t, dir, "pyproject.toml", oldTime)
-	writeFileWithMTime(t, dir, "requirements.txt", newTime)
+	writeFile(t, dir, "pyproject.toml", "old")
+	writeFile(t, dir, "requirements.txt", "same")
+	writeFile(t, dir, "pyproject.toml", "new")
 
 	current := state.Empty()
 	current.Ecosystems["python"] = state.EcosystemState{
-		LastSuccessAt: state.FormatRFC3339UTC(oldTime.Add(30 * time.Minute)),
+		LastSuccessAt: "2026-03-01T08:30:00Z",
+		Lockfiles: map[string]string{
+			"pyproject.toml":   hashText("old"),
+			"requirements.txt": hashText("same"),
+		},
 	}
 
 	results, err := Evaluate(
@@ -142,20 +131,22 @@ func TestEvaluateUsesMaxMatchedFileMTime(t *testing.T) {
 	}
 
 	if results[0].Decision != DecisionUpdate {
-		t.Fatalf("expected DecisionUpdate based on max matched file mtime, got %q", results[0].Decision)
+		t.Fatalf("expected DecisionUpdate when a lockfile changes, got %q", results[0].Decision)
 	}
-	if !results[0].MaxMTime.Equal(newTime) {
-		t.Fatalf("expected MaxMTime %s, got %s", newTime, results[0].MaxMTime)
+	if results[0].Lockfiles["pyproject.toml"] != hashText("new") {
+		t.Fatalf("expected updated pyproject.toml hash, got %q", results[0].Lockfiles["pyproject.toml"])
 	}
 }
 
-func writeFileWithMTime(t *testing.T, dir, rel string, mtime time.Time) {
+func writeFile(t *testing.T, dir, rel, contents string) {
 	t.Helper()
 	path := filepath.Join(dir, rel)
-	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 		t.Fatalf("write %s: %v", rel, err)
 	}
-	if err := os.Chtimes(path, mtime, mtime); err != nil {
-		t.Fatalf("chtimes %s: %v", rel, err)
-	}
+}
+
+func hashText(input string) string {
+	hasher := sha256.Sum256([]byte(input))
+	return hex.EncodeToString(hasher[:])
 }

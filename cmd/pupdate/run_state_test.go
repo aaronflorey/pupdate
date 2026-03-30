@@ -13,19 +13,19 @@ func TestStateUpdatesOnlyOnSuccessOutcomes(t *testing.T) {
 	current := state.FileState{
 		Version: state.SchemaVersion,
 		Ecosystems: map[string]state.EcosystemState{
-			"node":   {LastSuccessAt: "2026-03-01T10:00:00Z"},
-			"python": {LastSuccessAt: "2026-03-01T11:00:00Z"},
+			"node":   {LastSuccessAt: "2026-03-01T10:00:00Z", Lockfiles: map[string]string{"bun.lock": "old"}},
+			"python": {LastSuccessAt: "2026-03-01T11:00:00Z", Lockfiles: map[string]string{"requirements.txt": "old"}},
 		},
 	}
 
 	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{
-		{Ecosystem: "node", Succeeded: true},
-		{Ecosystem: "python", Succeeded: false},
+		{Ecosystem: "node", Succeeded: true, Lockfiles: map[string]string{"bun.lock": "new"}},
+		{Ecosystem: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
 	})
 
 	expected := map[string]state.EcosystemState{
-		"node":   {LastSuccessAt: state.FormatRFC3339UTC(now)},
-		"python": {LastSuccessAt: "2026-03-01T11:00:00Z"},
+		"node":   {LastSuccessAt: state.FormatRFC3339UTC(now), Lockfiles: map[string]string{"bun.lock": "new"}},
+		"python": {LastSuccessAt: "2026-03-01T11:00:00Z", Lockfiles: map[string]string{"requirements.txt": "old"}},
 	}
 	if !reflect.DeepEqual(updated.Ecosystems, expected) {
 		t.Fatalf("ecosystem state mismatch\ngot:  %#v\nwant: %#v", updated.Ecosystems, expected)
@@ -37,17 +37,20 @@ func TestStateUpdateDoesNotTouchFailedEcosystem(t *testing.T) {
 	current := state.FileState{
 		Version: state.SchemaVersion,
 		Ecosystems: map[string]state.EcosystemState{
-			"go": {LastSuccessAt: "2026-03-01T12:00:00Z"},
+			"go": {LastSuccessAt: "2026-03-01T12:00:00Z", Lockfiles: map[string]string{"go.mod": "old"}},
 		},
 	}
 
 	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{
-		{Ecosystem: "go", Succeeded: false},
+		{Ecosystem: "go", Succeeded: false, Lockfiles: map[string]string{"go.mod": "new"}},
 	})
 
 	got := updated.Ecosystems["go"].LastSuccessAt
 	if got != "2026-03-01T12:00:00Z" {
 		t.Fatalf("expected failed ecosystem timestamp unchanged, got %q", got)
+	}
+	if updated.Ecosystems["go"].Lockfiles["go.mod"] != "old" {
+		t.Fatalf("expected failed ecosystem lockfile hash unchanged, got %q", updated.Ecosystems["go"].Lockfiles["go.mod"])
 	}
 }
 
@@ -59,8 +62,8 @@ func TestStateUpdateNoSuccessNoMutation(t *testing.T) {
 	}
 
 	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{
-		{Ecosystem: "node", Succeeded: false},
-		{Ecosystem: "python", Succeeded: false},
+		{Ecosystem: "node", Succeeded: false, Lockfiles: map[string]string{"bun.lock": "new"}},
+		{Ecosystem: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
 	})
 
 	if len(updated.Ecosystems) != 0 {
