@@ -6,10 +6,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+	builtBy = "unknown"
+)
+
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pupdate",
-		Short: "Install dependencies on directory entry",
+		Use:     "pupdate",
+		Short:   "Install dependencies on directory entry",
+		Version: version,
 	}
 
 	cmd.AddCommand(newRunCmd())

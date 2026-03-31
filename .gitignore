@@ -3,3 +3,5 @@
 /.planning
 /IDEA.md
 /.superset
+# Added by goreleaser init:
+dist/
