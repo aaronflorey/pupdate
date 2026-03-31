@@ -70,7 +70,13 @@ func newInitCmd() *cobra.Command {
 
 func resolveShell(requested string) (string, error) {
 	if requested != "" {
-		return strings.ToLower(requested), nil
+		resolved := strings.ToLower(requested)
+		switch resolved {
+		case "bash", "zsh":
+			return resolved, nil
+		default:
+			return "", fmt.Errorf("unsupported shell %q; supported shells: bash, zsh", requested)
+		}
 	}
 
 	shell := filepath.Base(strings.TrimSpace(os.Getenv("SHELL")))
@@ -78,5 +84,11 @@ func resolveShell(requested string) (string, error) {
 		return "bash", nil
 	}
 
-	return strings.ToLower(shell), nil
+	resolved := strings.ToLower(shell)
+	switch resolved {
+	case "bash", "zsh":
+		return resolved, nil
+	default:
+		return "bash", nil
+	}
 }

@@ -3,33 +3,52 @@ package detection
 var ecosystemSignals = map[Ecosystem][]string{
 	EcosystemNode: {
 		"bun.lock",
-		"pnpm-lock.yaml",
-		"pnpm-lock.yml",
-		"yarn.lock",
 		"package-lock.json",
+		"pnpm-lock.yaml",
+		"yarn.lock",
 	},
 	EcosystemPHP: {
 		"composer.lock",
+	},
+	EcosystemPython: {
+		"uv.lock",
+		"poetry.lock",
+		"requirements.txt",
 	},
 	EcosystemGo: {
 		"go.mod",
 	},
 	EcosystemRust: {
-		"cargo.toml",
+		"cargo.lock",
 	},
-	EcosystemPython: {
-		"pyproject.toml",
-		"poetry.lock",
-		"uv.lock",
-		"pipfile.lock",
-		"requirements.txt",
+	EcosystemGit: {
+		".gitmodules",
 	},
 }
 
 var nodeManagerByLockfile = map[string]string{
 	"bun.lock":          "bun",
-	"pnpm-lock.yaml":    "pnpm",
-	"pnpm-lock.yml":     "pnpm",
-	"yarn.lock":         "yarn",
 	"package-lock.json": "npm",
+	"pnpm-lock.yaml":    "pnpm",
+	"yarn.lock":         "yarn",
+}
+
+var pythonManagerBySignal = map[string]string{
+	"uv.lock":          "uv",
+	"poetry.lock":      "poetry",
+	"requirements.txt": "pip",
+}
+
+var managerBySignal = map[Ecosystem]map[string]string{
+	EcosystemNode:   nodeManagerByLockfile,
+	EcosystemPython: pythonManagerBySignal,
+	EcosystemGo: {
+		"go.mod": "go",
+	},
+	EcosystemRust: {
+		"cargo.lock": "cargo",
+	},
+	EcosystemGit: {
+		".gitmodules": "git",
+	},
 }

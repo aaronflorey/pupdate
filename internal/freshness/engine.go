@@ -1,11 +1,13 @@
 package freshness
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -13,6 +15,8 @@ import (
 	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/state"
 )
+
+var gitSubmoduleStatusFn = defaultGitSubmoduleStatus
 
 type Decision string
 
@@ -55,10 +59,61 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 			}
 		}
 
+		if result.Ecosystem == detection.EcosystemGit {
+			lines, err := gitSubmoduleStatusFn(dir)
+			if err != nil {
+				decision.Decision = DecisionSkip
+				decision.Reason = fmt.Sprintf("git submodule status failed: %v", err)
+			} else if hasGitSubmoduleDrift(lines) {
+				decision.Decision = DecisionUpdate
+				decision.Reason = "git submodule state drifted from recorded revision"
+			}
+		}
+
 		decisions = append(decisions, decision)
 	}
 
 	return decisions, nil
+}
+
+func defaultGitSubmoduleStatus(dir string) ([]string, error) {
+	cmd := exec.Command("git", "submodule", "status", "--recursive")
+	cmd.Dir = dir
+	output, err := cmd.Output()
+	if err != nil {
+		var stderr []byte
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr = exitErr.Stderr
+		}
+		trimmed := strings.TrimSpace(string(bytes.TrimSpace(stderr)))
+		if trimmed != "" {
+			return nil, fmt.Errorf("%w: %s", err, trimmed)
+		}
+		return nil, err
+	}
+
+	lines := []string{}
+	for _, line := range strings.Split(string(output), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines, nil
+}
+
+func hasGitSubmoduleDrift(lines []string) bool {
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		switch trimmed[0] {
+		case '-', '+', 'U':
+			return true
+		}
+	}
+	return false
 }
 
 func hashMatchedFiles(dir string, matchedFiles []string) (map[string]string, error) {

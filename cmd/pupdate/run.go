@@ -44,6 +44,7 @@ type ecosystemOutcome struct {
 var detectFn = detection.Detect
 var execCommand = exec.CommandContext
 var lookPath = exec.LookPath
+var evaluateFreshnessFn = freshness.Evaluate
 
 func applySuccessfulOutcomes(now time.Time, current state.FileState, outcomes []ecosystemOutcome) state.FileState {
 	next := state.FileState{
@@ -95,7 +96,7 @@ func newRunCmd() *cobra.Command {
 				fmt.Fprintln(cmd.ErrOrStderr(), "pupdate:", warning)
 			}
 
-			decisions, err := freshness.Evaluate(".", results, currentState)
+			decisions, err := evaluateFreshnessFn(".", results, currentState)
 			if err != nil {
 				return fmt.Errorf("failed to evaluate dependency freshness: %w", err)
 			}
@@ -140,7 +141,7 @@ func newRunCmd() *cobra.Command {
 				return fmt.Errorf("failed to check .pupignore: %w", err)
 			}
 			if ignored {
-				fmt.Fprintln(cmd.ErrOrStderr(), "pupdate: .pupignore present; skipping installs")
+				fmt.Fprintln(cmd.ErrOrStderr(), "pupdate: skip repo (.pupignore)")
 				return nil
 			}
 
@@ -151,7 +152,19 @@ func newRunCmd() *cobra.Command {
 
 			for _, result := range results {
 				decision, ok := decisionByEcosystem[string(result.Ecosystem)]
-				if !ok || decision.Decision != freshness.DecisionUpdate {
+				if !ok {
+					continue
+				}
+				if decision.Decision != freshness.DecisionUpdate {
+					if result.Ecosystem == detection.EcosystemGit && strings.HasPrefix(decision.Reason, "git submodule status failed:") {
+						fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s\n", decision.Reason)
+						continue
+					}
+					reason := decision.Reason
+					if reason == "" {
+						reason = "up-to-date"
+					}
+					fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s)\n", result.Ecosystem, reason)
 					continue
 				}
 				if installDisabled {
@@ -167,10 +180,11 @@ func newRunCmd() *cobra.Command {
 				}
 
 				if _, err := lookPath(plan.Manager); err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: %s not found on PATH; skipping\n", plan.Manager)
+					fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s not found on PATH)\n", result.Ecosystem, plan.Manager)
 					continue
 				}
 
+				fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: run %s %s\n", plan.Manager, strings.Join(plan.Args, " "))
 				err = runInstall(cmd, quiet, plan.Manager, plan.Args...)
 				outcomes = append(outcomes, ecosystemOutcome{
 					Ecosystem: string(result.Ecosystem),
@@ -178,7 +192,7 @@ func newRunCmd() *cobra.Command {
 					Lockfiles: decision.Lockfiles,
 				})
 				if err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: %s install failed: %v\n", plan.Manager, err)
+					fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s install failed: %v\n", plan.Manager, err)
 				}
 			}
 
@@ -228,15 +242,43 @@ type managerPlan struct {
 func selectManagerPlan(result detection.DetectionResult) (managerPlan, bool, string) {
 	switch result.Ecosystem {
 	case detection.EcosystemPHP:
-		return managerPlan{Manager: "composer", Args: []string{"install"}}, true, ""
+		return managerPlan{Manager: "composer", Args: []string{"install", "--no-interaction", "--prefer-dist", "--no-scripts"}}, true, ""
 	case detection.EcosystemNode:
 		if len(result.Managers) != 1 {
 			return managerPlan{}, false, "multiple Node lockfiles detected; skipping install"
 		}
-		if result.Managers[0] != "bun" {
+		switch result.Managers[0] {
+		case "bun":
+			return managerPlan{Manager: "bun", Args: []string{"install", "--frozen-lockfile", "--ignore-scripts"}}, true, ""
+		case "npm":
+			return managerPlan{Manager: "npm", Args: []string{"ci", "--ignore-scripts"}}, true, ""
+		case "pnpm":
+			return managerPlan{Manager: "pnpm", Args: []string{"install", "--frozen-lockfile", "--ignore-scripts"}}, true, ""
+		case "yarn":
+			return managerPlan{Manager: "yarn", Args: []string{"install", "--frozen-lockfile", "--ignore-scripts"}}, true, ""
+		default:
 			return managerPlan{}, false, fmt.Sprintf("unsupported Node manager %q; skipping install", result.Managers[0])
 		}
-		return managerPlan{Manager: "bun", Args: []string{"install"}}, true, ""
+	case detection.EcosystemPython:
+		if len(result.Managers) != 1 {
+			return managerPlan{}, false, "multiple Python lockfiles detected; skipping install"
+		}
+		switch result.Managers[0] {
+		case "uv":
+			return managerPlan{Manager: "uv", Args: []string{"sync", "--frozen"}}, true, ""
+		case "poetry":
+			return managerPlan{Manager: "poetry", Args: []string{"install", "--no-interaction", "--sync"}}, true, ""
+		case "pip":
+			return managerPlan{Manager: "pip", Args: []string{"install", "-r", "requirements.txt", "--disable-pip-version-check", "--no-input"}}, true, ""
+		default:
+			return managerPlan{}, false, fmt.Sprintf("unsupported Python manager %q; skipping install", result.Managers[0])
+		}
+	case detection.EcosystemGo:
+		return managerPlan{Manager: "go", Args: []string{"mod", "download"}}, true, ""
+	case detection.EcosystemRust:
+		return managerPlan{Manager: "cargo", Args: []string{"fetch", "--locked"}}, true, ""
+	case detection.EcosystemGit:
+		return managerPlan{Manager: "git", Args: []string{"submodule", "update", "--init", "--recursive"}}, true, ""
 	default:
 		return managerPlan{}, false, fmt.Sprintf("unsupported ecosystem %q; skipping install", result.Ecosystem)
 	}

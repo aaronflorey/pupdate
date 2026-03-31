@@ -8,6 +8,7 @@ const (
 	EcosystemGo     Ecosystem = "go"
 	EcosystemRust   Ecosystem = "rust"
 	EcosystemPython Ecosystem = "python"
+	EcosystemGit    Ecosystem = "git"
 )
 
 type WarningCode string
@@ -22,8 +23,8 @@ type Warning struct {
 }
 
 type DetectionResult struct {
-	Ecosystem   Ecosystem
-	Managers    []string
+	Ecosystem    Ecosystem
+	Managers     []string
 	MatchedFiles []string
-	Warnings    []Warning
+	Warnings     []Warning
 }
