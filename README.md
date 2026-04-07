@@ -67,3 +67,12 @@ For git submodule repos, pupdate checks `git submodule status --recursive` and c
 updates when submodule state drifts even if `.gitmodules` content is unchanged.
 
 Manager binaries are resolved from your current `PATH` at runtime.
+
+## Release Automation
+
+`pupdate` uses Release Please + GitHub Actions + GoReleaser:
+
+- Pushes to `main` run CI (`go test ./... -count=1`) and trigger Release Please.
+- Release Please opens/updates a release PR and maintains `CHANGELOG.md`.
+- Merging the release PR creates a semver tag (`v*`).
+- Tag pushes trigger GoReleaser via `.goreleaser.yaml` to build and publish binaries.
