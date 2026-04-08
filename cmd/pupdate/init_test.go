@@ -26,6 +26,9 @@ func TestInitBashSnippetIncludesHookAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "pupdate run --quiet") {
 		t.Fatalf("expected bash snippet to invoke quiet run, got %q", out)
 	}
+	if strings.Contains(out, "2>/dev/null") {
+		t.Fatalf("expected bash snippet to preserve stderr status output, got %q", out)
+	}
 }
 
 func TestInitZshSnippetIncludesHooksAndQuietRun(t *testing.T) {
@@ -47,6 +50,9 @@ func TestInitZshSnippetIncludesHooksAndQuietRun(t *testing.T) {
 	}
 	if !strings.Contains(out, "pupdate run --quiet") {
 		t.Fatalf("expected zsh snippet to invoke quiet run, got %q", out)
+	}
+	if strings.Contains(out, "2>/dev/null") {
+		t.Fatalf("expected zsh snippet to preserve stderr status output, got %q", out)
 	}
 }
 

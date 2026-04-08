@@ -88,9 +88,9 @@ func TestRFC3339UTCHelpers(t *testing.T) {
 		t.Fatalf("expected RFC3339 UTC with Z suffix, got %q", formatted)
 	}
 
-	parsed, err := ParseRFC3339UTC(formatted)
+	parsed, err := parseRFC3339UTC(formatted)
 	if err != nil {
-		t.Fatalf("ParseRFC3339UTC returned error: %v", err)
+		t.Fatalf("parseRFC3339UTC returned error: %v", err)
 	}
 	if !parsed.Equal(fixture) {
 		t.Fatalf("expected parsed time %v, got %v", fixture, parsed)

@@ -72,6 +72,6 @@ func FormatRFC3339UTC(t time.Time) string {
 	return t.UTC().Format(time.RFC3339)
 }
 
-func ParseRFC3339UTC(raw string) (time.Time, error) {
+func parseRFC3339UTC(raw string) (time.Time, error) {
 	return time.Parse(time.RFC3339, raw)
 }

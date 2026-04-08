@@ -319,6 +319,30 @@ func TestRunPupignorePrintsSkipRepoAndSkipsInstalls(t *testing.T) {
 	}
 }
 
+func TestRunQuietStillPrintsStatusOnStderr(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, ".pupignore")
+	withChdir(t, dir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--quiet"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run command failed: %v", err)
+	}
+
+	if stdout.Len() != 0 {
+		t.Fatalf("expected quiet run to suppress stdout payload, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: skip repo (.pupignore)") {
+		t.Fatalf("expected quiet run to preserve stderr status output, got %q", stderr.String())
+	}
+}
+
 func TestRunPrintsSkipStatusForUnchangedEcosystem(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "composer.lock")
@@ -393,7 +417,7 @@ func TestSelectManagerPlanBunUsesSafeFlags(t *testing.T) {
 	plan, ok, reason := selectManagerPlan(detection.DetectionResult{
 		Ecosystem: detection.EcosystemNode,
 		Managers:  []string{"bun"},
-	})
+	}, false)
 
 	if !ok {
 		t.Fatalf("expected bun manager plan to be supported, reason=%q", reason)
@@ -409,7 +433,7 @@ func TestSelectManagerPlanBunUsesSafeFlags(t *testing.T) {
 func TestSelectManagerPlanComposerUsesSafeFlags(t *testing.T) {
 	plan, ok, reason := selectManagerPlan(detection.DetectionResult{
 		Ecosystem: detection.EcosystemPHP,
-	})
+	}, false)
 
 	if !ok {
 		t.Fatalf("expected composer manager plan to be supported, reason=%q", reason)
@@ -426,7 +450,7 @@ func TestSelectManagerPlanUnsupportedStillSkips(t *testing.T) {
 	_, ok, reason := selectManagerPlan(detection.DetectionResult{
 		Ecosystem: detection.EcosystemNode,
 		Managers:  []string{"npm", "pnpm"},
-	})
+	}, false)
 
 	if ok {
 		t.Fatalf("expected unsupported manager to skip")
@@ -495,7 +519,7 @@ func TestSelectManagerPlanExpandedManagersUseSafeFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plan, ok, reason := selectManagerPlan(tt.result)
+			plan, ok, reason := selectManagerPlan(tt.result, false)
 			if !ok {
 				t.Fatalf("expected manager plan to be supported, reason=%q", reason)
 			}
@@ -506,6 +530,86 @@ func TestSelectManagerPlanExpandedManagersUseSafeFlags(t *testing.T) {
 				t.Fatalf("unexpected args: got %#v want %#v", plan.Args, tt.args)
 			}
 		})
+	}
+}
+
+func TestSelectManagerPlanAllowScriptsDropsScriptBlockingFlags(t *testing.T) {
+	tests := []struct {
+		name   string
+		result detection.DetectionResult
+		args   []string
+	}{
+		{
+			name:   "composer",
+			result: detection.DetectionResult{Ecosystem: detection.EcosystemPHP},
+			args:   []string{"install", "--no-interaction", "--prefer-dist"},
+		},
+		{
+			name:   "bun",
+			result: detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"bun"}},
+			args:   []string{"install", "--frozen-lockfile"},
+		},
+		{
+			name:   "npm",
+			result: detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"npm"}},
+			args:   []string{"ci"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plan, ok, reason := selectManagerPlan(tt.result, true)
+			if !ok {
+				t.Fatalf("expected manager plan to be supported, reason=%q", reason)
+			}
+			if !slices.Equal(plan.Args, tt.args) {
+				t.Fatalf("unexpected args with allow-scripts: got %#v want %#v", plan.Args, tt.args)
+			}
+		})
+	}
+}
+
+func TestRunAllowScriptsUsesOptInFlags(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "package-lock.json")
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+
+	var ranName string
+	var ranArgs []string
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		ranName = name
+		ranArgs = append([]string(nil), args...)
+		return exec.CommandContext(ctx, "true")
+	}
+
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--allow-scripts"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run command failed: %v", err)
+	}
+
+	if ranName != "npm" {
+		t.Fatalf("expected npm execution, got %q", ranName)
+	}
+	if !slices.Equal(ranArgs, []string{"ci"}) {
+		t.Fatalf("expected allow-scripts run to omit --ignore-scripts, got %#v", ranArgs)
+	}
+	if !strings.Contains(stderr.String(), "pupdate: run npm ci") {
+		t.Fatalf("expected allow-scripts status line, got %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "--ignore-scripts") {
+		t.Fatalf("expected allow-scripts status line to omit script-blocking flag, got %q", stderr.String())
 	}
 }
 

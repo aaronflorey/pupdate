@@ -14,7 +14,7 @@ _pupdate_last_pwd=""
 _pupdate_hook() {
   if [ "$PWD" != "$_pupdate_last_pwd" ]; then
     _pupdate_last_pwd="$PWD"
-    pupdate run --quiet 2>/dev/null
+    pupdate run --quiet
   fi
 }
 if [ -n "$PROMPT_COMMAND" ]; then
@@ -30,7 +30,7 @@ _pupdate_last_pwd=""
 _pupdate_hook() {
   if [ "$PWD" != "$_pupdate_last_pwd" ]; then
     _pupdate_last_pwd="$PWD"
-    pupdate run --quiet 2>/dev/null
+    pupdate run --quiet
   fi
 }
 add-zsh-hook chpwd _pupdate_hook

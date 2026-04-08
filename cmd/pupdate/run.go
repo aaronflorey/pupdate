@@ -78,6 +78,7 @@ func applySuccessfulOutcomes(now time.Time, current state.FileState, outcomes []
 
 func newRunCmd() *cobra.Command {
 	var quiet bool
+	var allowScripts bool
 
 	cmd := &cobra.Command{
 		Use: "run",
@@ -171,7 +172,7 @@ func newRunCmd() *cobra.Command {
 					continue
 				}
 
-				plan, ok, reason := selectManagerPlan(result)
+				plan, ok, reason := selectManagerPlan(result, allowScripts)
 				if !ok {
 					if reason != "" {
 						fmt.Fprintln(cmd.ErrOrStderr(), "pupdate:", reason)
@@ -215,6 +216,7 @@ func newRunCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "suppress output")
+	cmd.Flags().BoolVar(&allowScripts, "allow-scripts", false, "allow dependency manager lifecycle scripts")
 	return cmd
 }
 
@@ -239,23 +241,27 @@ type managerPlan struct {
 	Args    []string
 }
 
-func selectManagerPlan(result detection.DetectionResult) (managerPlan, bool, string) {
+func selectManagerPlan(result detection.DetectionResult, allowScripts bool) (managerPlan, bool, string) {
 	switch result.Ecosystem {
 	case detection.EcosystemPHP:
-		return managerPlan{Manager: "composer", Args: []string{"install", "--no-interaction", "--prefer-dist", "--no-scripts"}}, true, ""
+		args := []string{"install", "--no-interaction", "--prefer-dist"}
+		if !allowScripts {
+			args = append(args, "--no-scripts")
+		}
+		return managerPlan{Manager: "composer", Args: args}, true, ""
 	case detection.EcosystemNode:
 		if len(result.Managers) != 1 {
 			return managerPlan{}, false, "multiple Node lockfiles detected; skipping install"
 		}
 		switch result.Managers[0] {
 		case "bun":
-			return managerPlan{Manager: "bun", Args: []string{"install", "--frozen-lockfile", "--ignore-scripts"}}, true, ""
+			return managerPlan{Manager: "bun", Args: nodeInstallArgs("install", "--frozen-lockfile", allowScripts)}, true, ""
 		case "npm":
-			return managerPlan{Manager: "npm", Args: []string{"ci", "--ignore-scripts"}}, true, ""
+			return managerPlan{Manager: "npm", Args: nodeInstallArgs("ci", "", allowScripts)}, true, ""
 		case "pnpm":
-			return managerPlan{Manager: "pnpm", Args: []string{"install", "--frozen-lockfile", "--ignore-scripts"}}, true, ""
+			return managerPlan{Manager: "pnpm", Args: nodeInstallArgs("install", "--frozen-lockfile", allowScripts)}, true, ""
 		case "yarn":
-			return managerPlan{Manager: "yarn", Args: []string{"install", "--frozen-lockfile", "--ignore-scripts"}}, true, ""
+			return managerPlan{Manager: "yarn", Args: nodeInstallArgs("install", "--frozen-lockfile", allowScripts)}, true, ""
 		default:
 			return managerPlan{}, false, fmt.Sprintf("unsupported Node manager %q; skipping install", result.Managers[0])
 		}
@@ -282,6 +288,17 @@ func selectManagerPlan(result detection.DetectionResult) (managerPlan, bool, str
 	default:
 		return managerPlan{}, false, fmt.Sprintf("unsupported ecosystem %q; skipping install", result.Ecosystem)
 	}
+}
+
+func nodeInstallArgs(command string, frozenFlag string, allowScripts bool) []string {
+	args := []string{command}
+	if frozenFlag != "" {
+		args = append(args, frozenFlag)
+	}
+	if !allowScripts {
+		args = append(args, "--ignore-scripts")
+	}
+	return args
 }
 
 func hasPupIgnore(dir string) (bool, error) {
