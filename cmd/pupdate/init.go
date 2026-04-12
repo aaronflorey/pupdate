@@ -9,45 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const bashInitSnippet = `# pupdate hook
-_pupdate_last_pwd=""
-_pupdate_hook() {
-  if [ "$PWD" != "$_pupdate_last_pwd" ]; then
-    _pupdate_last_pwd="$PWD"
-    pupdate run --quiet
-  fi
-}
-if [ -n "$PROMPT_COMMAND" ]; then
-  PROMPT_COMMAND="_pupdate_hook;$PROMPT_COMMAND"
-else
-  PROMPT_COMMAND="_pupdate_hook"
-fi
-`
-
-const zshInitSnippet = `# pupdate hook
-autoload -U add-zsh-hook
-_pupdate_last_pwd=""
-_pupdate_hook() {
-  if [ "$PWD" != "$_pupdate_last_pwd" ]; then
-    _pupdate_last_pwd="$PWD"
-    pupdate run --quiet
-  fi
-}
-add-zsh-hook chpwd _pupdate_hook
-add-zsh-hook precmd _pupdate_hook
-`
-
-const fishInitSnippet = `# pupdate hook
-set -g __pupdate_last_pwd ""
-function __pupdate_hook --on-variable PWD
-  if test "$PWD" != "$__pupdate_last_pwd"
-    set -g __pupdate_last_pwd "$PWD"
-    pupdate run --quiet
-  end
-end
-__pupdate_hook
-`
-
 func newInitCmd() *cobra.Command {
 	var shell string
 
@@ -60,16 +21,9 @@ func newInitCmd() *cobra.Command {
 				return err
 			}
 
-			var snippet string
-			switch resolved {
-			case "bash":
-				snippet = bashInitSnippet
-			case "zsh":
-				snippet = zshInitSnippet
-			case "fish":
-				snippet = fishInitSnippet
-			default:
-				return fmt.Errorf("unsupported shell %q", resolved)
+			snippet, err := initSnippetForShell(resolved)
+			if err != nil {
+				return err
 			}
 
 			_, err = fmt.Fprint(cmd.OutOrStdout(), snippet)
@@ -84,12 +38,11 @@ func newInitCmd() *cobra.Command {
 func resolveShell(requested string) (string, error) {
 	if requested != "" {
 		resolved := strings.ToLower(requested)
-		switch resolved {
-		case "bash", "zsh", "fish":
+		if isSupportedInitShell(resolved) {
 			return resolved, nil
-		default:
-			return "", fmt.Errorf("unsupported shell %q; supported shells: bash, zsh, fish", requested)
 		}
+
+		return "", fmt.Errorf("unsupported shell %q; supported shells: %s", requested, supportedInitShellsText())
 	}
 
 	shell := filepath.Base(strings.TrimSpace(os.Getenv("SHELL")))
@@ -98,10 +51,9 @@ func resolveShell(requested string) (string, error) {
 	}
 
 	resolved := strings.ToLower(shell)
-	switch resolved {
-	case "bash", "zsh", "fish":
+	if isSupportedInitShell(resolved) {
 		return resolved, nil
-	default:
-		return "bash", nil
 	}
+
+	return "bash", nil
 }
