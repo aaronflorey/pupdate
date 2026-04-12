@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-08)
 Phase: 08
 Plan: 1 of 1 in current phase
 Status: Complete — milestone closed and follow-up audit cleanup recorded
-Last activity: 2026-04-08
+Last activity: 2026-04-12 - Completed quick task 260412-uxf: add support for fish shell to the env setup command
 
 Progress: [██████████] 100%
 
@@ -110,6 +110,12 @@ Recent decisions affecting current work:
 ### Blockers/Concerns
 
 None yet.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260412-uxf | add support for fish shell to the env setup command | 2026-04-12 | 2ab425d | [260412-uxf-add-support-for-fish-shell-to-the-env-se](./quick/260412-uxf-add-support-for-fish-shell-to-the-env-se/) |
 
 ## Session Continuity
 
