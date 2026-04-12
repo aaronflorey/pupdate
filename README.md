@@ -34,11 +34,16 @@ eval "$(pupdate init --shell bash)"
 eval "$(pupdate init --shell zsh)"
 ```
 
+```bash
+eval "$(pupdate init --shell fish)"
+```
+
 Escaped form for docs or templates that need literal shell interpolation text:
 
 ```bash
 eval "\$(pupdate init --shell bash)"
 eval "\$(pupdate init --shell zsh)"
+eval "\$(pupdate init --shell fish)"
 ```
 
 The generated hooks run `pupdate run --quiet` on directory changes. Quiet mode
@@ -91,11 +96,11 @@ Environment:
 
 ### `pupdate init`
 
-Prints the shell hook snippet for `bash` or `zsh`.
+Prints the shell hook snippet for `bash`, `zsh`, or `fish`.
 
 Flags:
 
-- `--shell <bash|zsh>`: choose the shell explicitly
+- `--shell <bash|zsh|fish>`: choose the shell explicitly
 
 ## How It Works
 
