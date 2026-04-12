@@ -122,3 +122,39 @@ func TestInitDefaultsToFishWhenShellEnvIsFish(t *testing.T) {
 		t.Fatalf("expected fish default snippet to invoke quiet run, got %q", out)
 	}
 }
+
+func TestInitDefaultsToBashWhenShellEnvIsEmptyOrUnknown(t *testing.T) {
+	tests := []struct {
+		name     string
+		shellEnv string
+	}{
+		{name: "empty shell env", shellEnv: ""},
+		{name: "unknown shell env", shellEnv: "/usr/bin/tcsh"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SHELL", tt.shellEnv)
+
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			cmd := newRootCmd()
+			cmd.SetArgs([]string{"init"})
+			cmd.SetOut(&stdout)
+			cmd.SetErr(&stderr)
+
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("init command failed: %v (stderr=%q)", err, stderr.String())
+			}
+
+			out := stdout.String()
+			if !strings.Contains(out, "PROMPT_COMMAND") {
+				t.Fatalf("expected default snippet to be bash, got %q", out)
+			}
+			if !strings.Contains(out, "pupdate run --quiet") {
+				t.Fatalf("expected bash default snippet to invoke quiet run, got %q", out)
+			}
+		})
+	}
+}
