@@ -29,6 +29,14 @@ func Detect(dir string) ([]DetectionResult, error) {
 		EcosystemPython: {},
 		EcosystemGit:    {},
 	}
+	fileSeen := map[Ecosystem]map[string]bool{
+		EcosystemNode:   {},
+		EcosystemPHP:    {},
+		EcosystemGo:     {},
+		EcosystemRust:   {},
+		EcosystemPython: {},
+		EcosystemGit:    {},
+	}
 	managerSeen := map[Ecosystem]map[string]bool{
 		EcosystemNode:   {},
 		EcosystemPHP:    {},
@@ -56,7 +64,10 @@ func Detect(dir string) ([]DetectionResult, error) {
 			continue
 		}
 
-		filesByEcosystem[ecosystem] = append(filesByEcosystem[ecosystem], name)
+		if !fileSeen[ecosystem][name] {
+			fileSeen[ecosystem][name] = true
+			filesByEcosystem[ecosystem] = append(filesByEcosystem[ecosystem], name)
+		}
 		if ecosystemManagers, hasEcosystem := managerBySignal[ecosystem]; hasEcosystem {
 			if manager, hasManager := ecosystemManagers[name]; hasManager && !managerSeen[ecosystem][manager] {
 				managerSeen[ecosystem][manager] = true
