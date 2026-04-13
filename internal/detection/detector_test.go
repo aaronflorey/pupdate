@@ -289,3 +289,78 @@ func TestDetectDoesNotScanPastDepthOne(t *testing.T) {
 		t.Fatalf("expected no detections beyond depth-1, got %#v", results)
 	}
 }
+
+func TestDetectIncludesPackagesChildren(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "packages", "web"), 0o755); err != nil {
+		t.Fatalf("mkdir packages/web: %v", err)
+	}
+	writeFiles(t, filepath.Join(dir, "packages", "web"), "package-lock.json")
+
+	results, err := Detect(dir)
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected one ecosystem from packages child, got %#v", results)
+	}
+
+	node := assertContainsEcosystem(t, results, EcosystemNode)
+	if node.Directory != "packages/web" {
+		t.Fatalf("expected packages/web directory for node detection, got %q", node.Directory)
+	}
+	assertHasFile(t, node.MatchedFiles, "packages/web/package-lock.json")
+}
+
+func TestDetectDoesNotScanPastPackagesChildren(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "packages", "group", "web"), 0o755); err != nil {
+		t.Fatalf("mkdir packages/group/web: %v", err)
+	}
+	writeFiles(t, filepath.Join(dir, "packages", "group", "web"), "package-lock.json")
+
+	results, err := Detect(dir)
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+
+	if len(results) != 0 {
+		t.Fatalf("expected no detections beyond packages/*, got %#v", results)
+	}
+}
+
+func TestDetectSkipsGitignoredDirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "frontend"), 0o755); err != nil {
+		t.Fatalf("mkdir frontend: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "packages", "legacy"), 0o755); err != nil {
+		t.Fatalf("mkdir packages/legacy: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "packages", "active"), 0o755); err != nil {
+		t.Fatalf("mkdir packages/active: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("frontend/\npackages/legacy/\n"), 0o644); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+
+	writeFiles(t, filepath.Join(dir, "frontend"), "package-lock.json")
+	writeFiles(t, filepath.Join(dir, "packages", "legacy"), "composer.lock")
+	writeFiles(t, filepath.Join(dir, "packages", "active"), "package-lock.json")
+
+	results, err := Detect(dir)
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected only non-ignored detection, got %#v", results)
+	}
+
+	node := assertContainsEcosystem(t, results, EcosystemNode)
+	if node.Directory != "packages/active" {
+		t.Fatalf("expected packages/active directory for node detection, got %q", node.Directory)
+	}
+	assertHasFile(t, node.MatchedFiles, "packages/active/package-lock.json")
+}
