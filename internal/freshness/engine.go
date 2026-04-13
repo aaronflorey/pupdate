@@ -27,6 +27,7 @@ const (
 
 type EcosystemDecision struct {
 	Ecosystem string
+	StateKey  string
 	Decision  Decision
 	Reason    string
 	Lockfiles map[string]string
@@ -42,14 +43,19 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 		}
 
 		ecosystem := string(result.Ecosystem)
+		stateKey := result.StateKey()
 		decision := EcosystemDecision{
 			Ecosystem: ecosystem,
+			StateKey:  stateKey,
 			Decision:  DecisionUpdate,
 			Reason:    "missing prior lockfile hash",
 			Lockfiles: lockfiles,
 		}
 
-		ecosystemState, hasState := current.Ecosystems[ecosystem]
+		ecosystemState, hasState := current.Ecosystems[stateKey]
+		if !hasState && (result.Directory == "" || result.Directory == ".") {
+			ecosystemState, hasState = current.Ecosystems[ecosystem]
+		}
 		if hasState && len(ecosystemState.Lockfiles) > 0 {
 			if lockfilesEqual(ecosystemState.Lockfiles, lockfiles) {
 				decision.Decision = DecisionSkip

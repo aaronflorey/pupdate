@@ -24,7 +24,15 @@ type Warning struct {
 
 type DetectionResult struct {
 	Ecosystem    Ecosystem
+	Directory    string
 	Managers     []string
 	MatchedFiles []string
 	Warnings     []Warning
+}
+
+func (r DetectionResult) StateKey() string {
+	if r.Directory == "" || r.Directory == "." {
+		return string(r.Ecosystem)
+	}
+	return string(r.Ecosystem) + "@" + r.Directory
 }

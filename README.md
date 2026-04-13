@@ -1,9 +1,9 @@
 # pupdate
 
 `pupdate` is a fast Go CLI that keeps project dependencies up to date when you
-enter a repository. It detects the dependency ecosystem in the current directory,
-runs the matching package manager when work is needed, and skips unnecessary installs
-when dependency files have not changed.
+enter a repository. It detects dependency ecosystems in the current directory and
+depth-1 subdirectories, runs the matching package manager when work is needed,
+and skips unnecessary installs when dependency files have not changed.
 
 It is built for shell-hook usage on `cd`, so the common path stays low-latency,
 safe by default, and easy to follow from concise stderr status output.
@@ -104,10 +104,11 @@ Flags:
 
 ## How It Works
 
-1. `pupdate run` performs a non-recursive scan of the current directory for known
+1. `pupdate run` scans the current directory and depth-1 subdirectories for known
    lockfiles and manifests.
 2. It detects the matching ecosystem and package manager.
-3. It compares current file hashes against the local `.pupdate` state file.
+3. It compares current file hashes against the local `.pupdate` state file using
+   namespaced keys per ecosystem and directory.
 4. If dependency inputs are unchanged since the last successful run, it skips work.
 5. If inputs changed, or if no successful state exists yet, it runs the manager's
    safe default command.
@@ -121,8 +122,8 @@ can react to submodule drift even when `.gitmodules` itself has not changed.
 During manual or hook-driven runs, stderr uses stable, concise prefixes:
 
 - `pupdate: skip repo (.pupignore)`
-- `pupdate: skip <ecosystem> (<reason>)`
-- `pupdate: run <manager> <args>`
+- `pupdate: skip <target> (<reason>)`
+- `pupdate: run <manager> <args> (in <subdir>)`
 - `pupdate: error <manager> install failed: <err>`
 
 These messages are meant to stay readable in interactive shells and easy to grep
