@@ -43,3 +43,14 @@ release:
     ---
 
     Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
+
+brews:
+  - name: pupdate
+    repository:
+      owner: aaronflorey
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/aaronflorey/pupdate"
+    description: "Auto-update project dependencies on directory entry"
