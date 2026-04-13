@@ -233,3 +233,59 @@ func TestDetectSingleNodeLockfileHasNoWarning(t *testing.T) {
 		t.Fatalf("expected no node ambiguity warnings for single lockfile, got %#v", node.Warnings)
 	}
 }
+
+func TestDetectIncludesDepthOneSubdirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "frontend"), 0o755); err != nil {
+		t.Fatalf("mkdir frontend: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "backend"), 0o755); err != nil {
+		t.Fatalf("mkdir backend: %v", err)
+	}
+	writeFiles(t, filepath.Join(dir, "frontend"), "package-lock.json")
+	writeFiles(t, filepath.Join(dir, "backend"), "composer.lock")
+
+	results, err := Detect(dir)
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 ecosystems from depth-1 subdirectories, got %#v", results)
+	}
+
+	node := assertContainsEcosystem(t, results, EcosystemNode)
+	if node.Directory != "frontend" {
+		t.Fatalf("expected frontend directory for node detection, got %q", node.Directory)
+	}
+	assertHasFile(t, node.MatchedFiles, "frontend/package-lock.json")
+	if node.StateKey() != "node@frontend" {
+		t.Fatalf("unexpected node state key: %q", node.StateKey())
+	}
+
+	php := assertContainsEcosystem(t, results, EcosystemPHP)
+	if php.Directory != "backend" {
+		t.Fatalf("expected backend directory for php detection, got %q", php.Directory)
+	}
+	assertHasFile(t, php.MatchedFiles, "backend/composer.lock")
+	if php.StateKey() != "php@backend" {
+		t.Fatalf("unexpected php state key: %q", php.StateKey())
+	}
+}
+
+func TestDetectDoesNotScanPastDepthOne(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "apps", "web"), 0o755); err != nil {
+		t.Fatalf("mkdir apps/web: %v", err)
+	}
+	writeFiles(t, filepath.Join(dir, "apps", "web"), "package-lock.json")
+
+	results, err := Detect(dir)
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+
+	if len(results) != 0 {
+		t.Fatalf("expected no detections beyond depth-1, got %#v", results)
+	}
+}

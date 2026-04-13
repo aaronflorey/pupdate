@@ -19,8 +19,8 @@ func TestStateUpdatesOnlyOnSuccessOutcomes(t *testing.T) {
 	}
 
 	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{
-		{Ecosystem: "node", Succeeded: true, Lockfiles: map[string]string{"bun.lock": "new"}},
-		{Ecosystem: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
+		{StateKey: "node", Succeeded: true, Lockfiles: map[string]string{"bun.lock": "new"}},
+		{StateKey: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
 	})
 
 	expected := map[string]state.EcosystemState{
@@ -42,7 +42,7 @@ func TestStateUpdateDoesNotTouchFailedEcosystem(t *testing.T) {
 	}
 
 	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{
-		{Ecosystem: "go", Succeeded: false, Lockfiles: map[string]string{"go.mod": "new"}},
+		{StateKey: "go", Succeeded: false, Lockfiles: map[string]string{"go.mod": "new"}},
 	})
 
 	got := updated.Ecosystems["go"].LastSuccessAt
@@ -62,8 +62,8 @@ func TestStateUpdateNoSuccessNoMutation(t *testing.T) {
 	}
 
 	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{
-		{Ecosystem: "node", Succeeded: false, Lockfiles: map[string]string{"bun.lock": "new"}},
-		{Ecosystem: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
+		{StateKey: "node", Succeeded: false, Lockfiles: map[string]string{"bun.lock": "new"}},
+		{StateKey: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
 	})
 
 	if len(updated.Ecosystems) != 0 {
