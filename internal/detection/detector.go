@@ -1,11 +1,18 @@
 package detection
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 )
+
+type ignoreMatcher interface {
+	Match(path []string, isDir bool) bool
+}
 
 func Detect(dir string) ([]DetectionResult, error) {
 	directories, err := scanDirectories(dir)
@@ -47,6 +54,11 @@ func Detect(dir string) ([]DetectionResult, error) {
 }
 
 func scanDirectories(dir string) ([]string, error) {
+	matcher, err := loadIgnoreMatcher(dir)
+	if err != nil {
+		return nil, err
+	}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -57,10 +69,74 @@ func scanDirectories(dir string) ([]string, error) {
 		if !entry.IsDir() || (entry.Type()&os.ModeSymlink) != 0 {
 			continue
 		}
-		directories = append(directories, entry.Name())
+
+		relPath := entry.Name()
+		if shouldSkipDirectory(matcher, relPath) {
+			continue
+		}
+
+		directories = append(directories, relPath)
+
+		if relPath != "packages" {
+			continue
+		}
+
+		packageEntries, err := os.ReadDir(filepath.Join(dir, relPath))
+		if err != nil {
+			return nil, err
+		}
+
+		for _, packageEntry := range packageEntries {
+			if !packageEntry.IsDir() || (packageEntry.Type()&os.ModeSymlink) != 0 {
+				continue
+			}
+
+			packagePath := filepath.ToSlash(filepath.Join(relPath, packageEntry.Name()))
+			if shouldSkipDirectory(matcher, packagePath) {
+				continue
+			}
+
+			directories = append(directories, packagePath)
+		}
 	}
 	slices.Sort(directories[1:])
 	return directories, nil
+}
+
+func loadIgnoreMatcher(dir string) (ignoreMatcher, error) {
+	ignorePath := filepath.Join(dir, ".gitignore")
+	raw, err := os.ReadFile(ignorePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	lines := strings.Split(string(raw), "\n")
+	patterns := make([]gitignore.Pattern, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSuffix(line, "\r")
+		if line == "" {
+			continue
+		}
+		patterns = append(patterns, gitignore.ParsePattern(line, nil))
+	}
+
+	if len(patterns) == 0 {
+		return nil, nil
+	}
+
+	return gitignore.NewMatcher(patterns), nil
+}
+
+func shouldSkipDirectory(matcher ignoreMatcher, path string) bool {
+	if matcher == nil {
+		return false
+	}
+
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	return matcher.Match(parts, true)
 }
 
 func detectDirectory(dirPath string, relativeDir string, signalToEcosystem map[string]Ecosystem, order []Ecosystem) ([]DetectionResult, error) {
