@@ -25,6 +25,7 @@ type runPayload struct {
 
 type runEcosystemPayload struct {
 	Ecosystem    detection.Ecosystem `json:"ecosystem"`
+	Directory    string              `json:"directory,omitempty"`
 	Managers     []string            `json:"managers"`
 	MatchedFiles []string            `json:"matched_files"`
 	Warnings     []runWarningPayload `json:"warnings"`
@@ -36,7 +37,7 @@ type runWarningPayload struct {
 }
 
 type ecosystemOutcome struct {
-	Ecosystem string
+	StateKey  string
 	Succeeded bool
 	Lockfiles map[string]string
 }
@@ -62,12 +63,12 @@ func applySuccessfulOutcomes(now time.Time, current state.FileState, outcomes []
 		if !outcome.Succeeded {
 			continue
 		}
-		existing := next.Ecosystems[outcome.Ecosystem]
+		existing := next.Ecosystems[outcome.StateKey]
 		lockfiles := existing.Lockfiles
 		if len(outcome.Lockfiles) > 0 {
 			lockfiles = cloneLockfiles(outcome.Lockfiles)
 		}
-		next.Ecosystems[outcome.Ecosystem] = state.EcosystemState{
+		next.Ecosystems[outcome.StateKey] = state.EcosystemState{
 			LastSuccessAt: state.FormatRFC3339UTC(now),
 			Lockfiles:     lockfiles,
 		}
@@ -103,7 +104,7 @@ func newRunCmd() *cobra.Command {
 			}
 			decisionByEcosystem := make(map[string]freshness.EcosystemDecision, len(decisions))
 			for _, decision := range decisions {
-				decisionByEcosystem[decision.Ecosystem] = decision
+				decisionByEcosystem[decision.StateKey] = decision
 			}
 
 			outcomes := []ecosystemOutcome{}
@@ -122,8 +123,14 @@ func newRunCmd() *cobra.Command {
 					payload.Warnings = append(payload.Warnings, wp)
 				}
 
+				payloadDirectory := result.Directory
+				if payloadDirectory == "." {
+					payloadDirectory = ""
+				}
+
 				payload.Ecosystems = append(payload.Ecosystems, runEcosystemPayload{
 					Ecosystem:    result.Ecosystem,
+					Directory:    payloadDirectory,
 					Managers:     result.Managers,
 					MatchedFiles: result.MatchedFiles,
 					Warnings:     ecosystemWarnings,
@@ -152,10 +159,12 @@ func newRunCmd() *cobra.Command {
 			}
 
 			for _, result := range results {
-				decision, ok := decisionByEcosystem[string(result.Ecosystem)]
+				stateKey := result.StateKey()
+				decision, ok := decisionByEcosystem[stateKey]
 				if !ok {
 					continue
 				}
+				target := resultTarget(result)
 				if decision.Decision != freshness.DecisionUpdate {
 					if result.Ecosystem == detection.EcosystemGit && strings.HasPrefix(decision.Reason, "git submodule status failed:") {
 						fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s\n", decision.Reason)
@@ -165,7 +174,7 @@ func newRunCmd() *cobra.Command {
 					if reason == "" {
 						reason = "up-to-date"
 					}
-					fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s)\n", result.Ecosystem, reason)
+					fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s)\n", target, reason)
 					continue
 				}
 				if installDisabled {
@@ -181,14 +190,18 @@ func newRunCmd() *cobra.Command {
 				}
 
 				if _, err := lookPath(plan.Manager); err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s not found on PATH)\n", result.Ecosystem, plan.Manager)
+					fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s not found on PATH)\n", target, plan.Manager)
 					continue
 				}
 
-				fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: run %s %s\n", plan.Manager, strings.Join(plan.Args, " "))
-				err = runInstall(cmd, quiet, plan.Manager, plan.Args...)
+				runLine := fmt.Sprintf("pupdate: run %s %s", plan.Manager, strings.Join(plan.Args, " "))
+				if result.Directory != "" && result.Directory != "." {
+					runLine += fmt.Sprintf(" (in %s)", result.Directory)
+				}
+				fmt.Fprintln(cmd.ErrOrStderr(), runLine)
+				err = runInstall(cmd, quiet, filepath.Join(".", result.Directory), plan.Manager, plan.Args...)
 				outcomes = append(outcomes, ecosystemOutcome{
-					Ecosystem: string(result.Ecosystem),
+					StateKey:  stateKey,
 					Succeeded: err == nil,
 					Lockfiles: decision.Lockfiles,
 				})
@@ -220,11 +233,12 @@ func newRunCmd() *cobra.Command {
 	return cmd
 }
 
-func runInstall(cmd *cobra.Command, quiet bool, name string, args ...string) error {
+func runInstall(cmd *cobra.Command, quiet bool, workDir string, name string, args ...string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
 	defer cancel()
 
 	command := execCommand(ctx, name, args...)
+	command.Dir = workDir
 	if quiet {
 		command.Stdout = io.Discard
 		command.Stderr = io.Discard
@@ -322,6 +336,13 @@ func cloneLockfiles(lockfiles map[string]string) map[string]string {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func resultTarget(result detection.DetectionResult) string {
+	if result.Directory == "" || result.Directory == "." {
+		return string(result.Ecosystem)
+	}
+	return fmt.Sprintf("%s:%s", result.Ecosystem, result.Directory)
 }
 
 func isInstallDisabled() bool {

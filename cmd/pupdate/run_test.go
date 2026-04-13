@@ -381,6 +381,66 @@ func TestRunPrintsSkipStatusForUnchangedEcosystem(t *testing.T) {
 	}
 }
 
+func TestRunUpdatesDepthOneSubdirectoryAndSavesNamespacedState(t *testing.T) {
+	dir := t.TempDir()
+	frontendDir := filepath.Join(dir, "frontend")
+	if err := os.Mkdir(frontendDir, 0o755); err != nil {
+		t.Fatalf("mkdir frontend: %v", err)
+	}
+	writeFixtureFiles(t, frontendDir, "package-lock.json")
+	withChdir(t, dir)
+
+	ranDirFile := filepath.Join(dir, "ran_dir")
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "sh", "-c", "pwd > \""+ranDirFile+"\"")
+	}
+
+	var stderr bytes.Buffer
+	cmd := newRunCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run command failed: %v", err)
+	}
+
+	ranDirRaw, err := os.ReadFile(ranDirFile)
+	if err != nil {
+		t.Fatalf("read ran_dir output: %v", err)
+	}
+	ranDir := strings.TrimSpace(string(ranDirRaw))
+	if ranDir != frontendDir {
+		t.Fatalf("expected install command to run in %q, got %q", frontendDir, ranDir)
+	}
+	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts (in frontend)") {
+		t.Fatalf("expected depth-1 run status line, got %q", stderr.String())
+	}
+
+	stored, warnings, err := state.NewStore(dir).Load()
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected state warnings: %v", warnings)
+	}
+	entry, ok := stored.Ecosystems["node@frontend"]
+	if !ok {
+		t.Fatalf("expected namespaced node state key, got %#v", stored.Ecosystems)
+	}
+	if entry.LastSuccessAt == "" {
+		t.Fatalf("expected last_success_at for namespaced state key")
+	}
+	if _, ok := entry.Lockfiles["frontend/package-lock.json"]; !ok {
+		t.Fatalf("expected namespaced state to include subdirectory lockfile hash, got %#v", entry.Lockfiles)
+	}
+}
+
 func TestRunPrintsErrorStatusWhenInstallFails(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "bun.lock")
@@ -719,6 +779,7 @@ func TestRunExecutesGitSubmoduleUpdateWhenGitDecisionRequiresUpdate(t *testing.T
 	evaluateFreshnessFn = func(dir string, detections []detection.DetectionResult, current state.FileState) ([]freshness.EcosystemDecision, error) {
 		return []freshness.EcosystemDecision{{
 			Ecosystem: "git",
+			StateKey:  "git",
 			Decision:  freshness.DecisionUpdate,
 			Reason:    "git submodule state drifted from recorded revision",
 			Lockfiles: map[string]string{".gitmodules": "hash"},

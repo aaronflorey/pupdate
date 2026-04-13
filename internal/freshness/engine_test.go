@@ -207,6 +207,51 @@ func TestEvaluateGitSubmoduleStatusFailureDoesNotFailEvaluation(t *testing.T) {
 	}
 }
 
+func TestEvaluateUsesNamespacedStateKeysForSubdirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "frontend"), 0o755); err != nil {
+		t.Fatalf("mkdir frontend: %v", err)
+	}
+	writeFile(t, filepath.Join(dir, "frontend"), "package-lock.json", "same")
+
+	current := state.Empty()
+	current.Ecosystems["node"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"package-lock.json": hashText("different"),
+		},
+	}
+	current.Ecosystems["node@frontend"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"frontend/package-lock.json": hashText("same"),
+		},
+	}
+
+	decisions, err := Evaluate(
+		dir,
+		[]detection.DetectionResult{{
+			Ecosystem:    detection.EcosystemNode,
+			Directory:    "frontend",
+			MatchedFiles: []string{"frontend/package-lock.json"},
+		}},
+		current,
+	)
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+
+	if len(decisions) != 1 {
+		t.Fatalf("expected one decision, got %d", len(decisions))
+	}
+	if decisions[0].StateKey != "node@frontend" {
+		t.Fatalf("expected namespaced state key, got %q", decisions[0].StateKey)
+	}
+	if decisions[0].Decision != DecisionSkip {
+		t.Fatalf("expected subdirectory state comparison to skip, got %q", decisions[0].Decision)
+	}
+}
+
 func writeFile(t *testing.T, dir, rel, contents string) {
 	t.Helper()
 	path := filepath.Join(dir, rel)
