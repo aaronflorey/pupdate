@@ -56,9 +56,9 @@ eval "\$(pupdate init --shell zsh)"
 eval "\$(pupdate init --shell fish)"
 ```
 
-The generated hooks run `pupdate run --quiet` on directory changes. Quiet mode
-suppresses stdout and child command noise, but keeps concise stderr status lines
-visible so hook-driven runs stay transparent.
+The generated hooks run `pupdate run --quiet` on directory changes, but skip
+launching from `$HOME`. Quiet mode stays silent for no-op runs and only prints
+status when an update actually executes.
 
 ## What It Does
 
@@ -92,12 +92,12 @@ Manager binaries are resolved from the current process `PATH`, which keeps
 
 ### `pupdate run`
 
-Detects supported ecosystems in the current directory, prints a JSON summary to
-stdout by default, and emits run/skip/error status lines on stderr.
+Detects supported ecosystems in the current directory and emits human-readable
+status lines on stderr. The command skips the user's home directory.
 
 Flags:
 
-- `--quiet`: suppress stdout and child command output
+- `--quiet`: suppress no-op output and child command output
 - `--allow-scripts`: allow dependency manager lifecycle scripts where supported
 
 Environment:
@@ -129,12 +129,19 @@ can react to submodule drift even when `.gitmodules` itself has not changed.
 
 ## Status Output
 
-During manual or hook-driven runs, stderr uses stable, concise prefixes:
+Manual runs use stable, concise stderr prefixes:
 
+- `pupdate: skip repo ($HOME)`
 - `pupdate: skip repo (.pupignore)`
+- `pupdate: installs disabled via PUPDATE_SKIP_INSTALL`
 - `pupdate: skip <target> (<reason>)`
 - `pupdate: run <manager> <args> (in <subdir>)`
+- `pupdate: done <manager> (in <subdir>)`
 - `pupdate: error <manager> install failed: <err>`
+
+`--quiet` suppresses skip and no-op lines so hook-driven runs stay silent unless
+an update actually runs. Successful updates still print `run` and `done` lines,
+and failed updates print an `error` line.
 
 These messages are meant to stay readable in interactive shells and easy to grep
 from shell history or logs.
@@ -145,5 +152,5 @@ from shell history or logs.
 - Lifecycle scripts are disabled by default where supported.
 - `--allow-scripts` is required to opt into lifecycle scripts.
 - `.pupignore` disables automatic runs for a repository.
-- Hook-driven runs remain non-blocking and keep stderr visibility.
+- Hook-driven runs remain non-blocking and avoid launching from `$HOME`.
 - Git submodule status failures are surfaced as stderr errors without crashing the command.
