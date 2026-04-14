@@ -20,12 +20,17 @@ type runExecution struct {
 }
 
 func executeRun(cmd *cobra.Command, options runOptions) error {
-	execution, err := prepareRunExecution(cmd)
+	inHomeDir, err := isHomeDirectory()
 	if err != nil {
 		return err
 	}
+	if inHomeDir {
+		printStatus(cmd, options.Quiet, "pupdate: skip repo ($HOME)")
+		return nil
+	}
 
-	if err := writeRunPayload(cmd, options.Quiet, execution.Results); err != nil {
+	execution, err := prepareRunExecution(cmd, options)
+	if err != nil {
 		return err
 	}
 
@@ -34,20 +39,20 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 		return fmt.Errorf("failed to check .pupignore: %w", err)
 	}
 	if ignored {
-		fmt.Fprintln(cmd.ErrOrStderr(), "pupdate: skip repo (.pupignore)")
+		printStatus(cmd, options.Quiet, "pupdate: skip repo (.pupignore)")
 		return nil
 	}
 
 	installDisabled := isInstallDisabled()
 	if installDisabled {
-		fmt.Fprintln(cmd.ErrOrStderr(), "pupdate: installs disabled via PUPDATE_SKIP_INSTALL")
+		printStatus(cmd, options.Quiet, "pupdate: installs disabled via PUPDATE_SKIP_INSTALL")
 	}
 
 	outcomes := executeRunResults(cmd, execution.Results, execution.DecisionByEcosystem, options, installDisabled)
 	return saveSuccessfulRunOutcomes(execution.Store, execution.CurrentState, outcomes)
 }
 
-func prepareRunExecution(cmd *cobra.Command) (runExecution, error) {
+func prepareRunExecution(cmd *cobra.Command, options runOptions) (runExecution, error) {
 	results, err := detectFn(".")
 	if err != nil {
 		return runExecution{}, fmt.Errorf("detection failed: %w", err)
@@ -59,7 +64,7 @@ func prepareRunExecution(cmd *cobra.Command) (runExecution, error) {
 		return runExecution{}, fmt.Errorf("failed to load state: %w", err)
 	}
 	for _, warning := range warnings {
-		fmt.Fprintln(cmd.ErrOrStderr(), "pupdate:", warning)
+		printStatus(cmd, options.Quiet, "pupdate: "+warning)
 	}
 
 	decisions, err := evaluateFreshnessFn(".", results, currentState)
@@ -114,7 +119,7 @@ func executeRunResult(
 ) (ecosystemOutcome, bool) {
 	target := resultTarget(result)
 	if decision.Decision != freshness.DecisionUpdate {
-		printSkipDecision(cmd, result, decision, target)
+		printSkipDecision(cmd, options.Quiet, result, decision, target)
 		return ecosystemOutcome{}, false
 	}
 	if installDisabled {
@@ -123,14 +128,16 @@ func executeRunResult(
 
 	plan, ok, reason := selectManagerPlan(result, options.AllowScripts)
 	if !ok {
-		if reason != "" {
+		if reason != "" && !options.Quiet {
 			fmt.Fprintln(cmd.ErrOrStderr(), "pupdate:", reason)
 		}
 		return ecosystemOutcome{}, false
 	}
 
 	if _, err := lookPath(plan.Manager); err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s not found on PATH)\n", target, plan.Manager)
+		if !options.Quiet {
+			fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s not found on PATH)\n", target, plan.Manager)
+		}
 		return ecosystemOutcome{}, false
 	}
 
@@ -138,6 +145,8 @@ func executeRunResult(
 	err := runInstall(cmd, options.Quiet, filepath.Join(".", result.Directory), plan.Manager, plan.Args...)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s install failed: %v\n", plan.Manager, err)
+	} else {
+		fmt.Fprintln(cmd.ErrOrStderr(), formatDoneLine(result, plan))
 	}
 
 	return ecosystemOutcome{
@@ -147,7 +156,11 @@ func executeRunResult(
 	}, true
 }
 
-func printSkipDecision(cmd *cobra.Command, result detection.DetectionResult, decision freshness.EcosystemDecision, target string) {
+func printSkipDecision(cmd *cobra.Command, quiet bool, result detection.DetectionResult, decision freshness.EcosystemDecision, target string) {
+	if quiet {
+		return
+	}
+
 	if result.Ecosystem == detection.EcosystemGit && strings.HasPrefix(decision.Reason, "git submodule status failed:") {
 		fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s\n", decision.Reason)
 		return
@@ -160,12 +173,27 @@ func printSkipDecision(cmd *cobra.Command, result detection.DetectionResult, dec
 	fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s)\n", target, reason)
 }
 
+func printStatus(cmd *cobra.Command, quiet bool, line string) {
+	if quiet {
+		return
+	}
+	fmt.Fprintln(cmd.ErrOrStderr(), line)
+}
+
 func formatRunLine(result detection.DetectionResult, plan managerPlan) string {
 	runLine := fmt.Sprintf("pupdate: run %s %s", plan.Manager, strings.Join(plan.Args, " "))
 	if result.Directory != "" && result.Directory != "." {
 		runLine += fmt.Sprintf(" (in %s)", result.Directory)
 	}
 	return runLine
+}
+
+func formatDoneLine(result detection.DetectionResult, plan managerPlan) string {
+	doneLine := fmt.Sprintf("pupdate: done %s", plan.Manager)
+	if result.Directory != "" && result.Directory != "." {
+		doneLine += fmt.Sprintf(" (in %s)", result.Directory)
+	}
+	return doneLine
 }
 
 func hasPupIgnore(dir string) (bool, error) {
@@ -194,4 +222,18 @@ func isInstallDisabled() bool {
 	}
 	value = strings.ToLower(value)
 	return value == "1" || value == "true" || value == "yes"
+}
+
+func isHomeDirectory() (bool, error) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve working directory: %w", err)
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return false, nil
+	}
+
+	return filepath.Clean(workingDir) == filepath.Clean(homeDir), nil
 }

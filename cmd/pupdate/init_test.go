@@ -26,6 +26,9 @@ func TestInitBashSnippetIncludesHookAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "pupdate run --quiet") {
 		t.Fatalf("expected bash snippet to invoke quiet run, got %q", out)
 	}
+	if !strings.Contains(out, "[ \"$PWD\" != \"$HOME\" ]") {
+		t.Fatalf("expected bash snippet to skip $HOME, got %q", out)
+	}
 	if strings.Contains(out, "2>/dev/null") {
 		t.Fatalf("expected bash snippet to preserve stderr status output, got %q", out)
 	}
@@ -51,6 +54,9 @@ func TestInitZshSnippetIncludesHooksAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "pupdate run --quiet") {
 		t.Fatalf("expected zsh snippet to invoke quiet run, got %q", out)
 	}
+	if !strings.Contains(out, "[ \"$PWD\" != \"$HOME\" ]") {
+		t.Fatalf("expected zsh snippet to skip $HOME, got %q", out)
+	}
 	if strings.Contains(out, "2>/dev/null") {
 		t.Fatalf("expected zsh snippet to preserve stderr status output, got %q", out)
 	}
@@ -75,6 +81,9 @@ func TestInitFishSnippetIncludesHookAndQuietRun(t *testing.T) {
 	}
 	if !strings.Contains(out, "pupdate run --quiet") {
 		t.Fatalf("expected fish snippet to invoke quiet run, got %q", out)
+	}
+	if !strings.Contains(out, "test \"$PWD\" != \"$HOME\"") {
+		t.Fatalf("expected fish snippet to skip $HOME, got %q", out)
 	}
 	if strings.Contains(out, "2>/dev/null") {
 		t.Fatalf("expected fish snippet to preserve stderr status output, got %q", out)
