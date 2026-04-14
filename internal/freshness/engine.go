@@ -21,8 +21,9 @@ var gitSubmoduleStatusFn = defaultGitSubmoduleStatus
 type Decision string
 
 const (
-	DecisionUpdate Decision = "update"
-	DecisionSkip   Decision = "skip"
+	DecisionUpdate       Decision = "update"
+	DecisionSkip         Decision = "skip"
+	phpVendorChecksumKey          = "vendor/.pupdate-checksum"
 )
 
 type EcosystemDecision struct {
@@ -44,17 +45,30 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 
 		ecosystem := string(result.Ecosystem)
 		stateKey := result.StateKey()
+		ecosystemState, hasState := current.Ecosystems[stateKey]
+		if !hasState && (result.Directory == "" || result.Directory == ".") {
+			ecosystemState, hasState = current.Ecosystems[ecosystem]
+		}
+
+		if result.Ecosystem == detection.EcosystemPHP {
+			shouldTrackVendor, err := shouldTrackPHPVendor(dir, result, ecosystemState, hasState)
+			if err != nil {
+				return nil, err
+			}
+			if shouldTrackVendor {
+				checksum, err := hashPHPVendorChecksum(dir, result)
+				if err != nil {
+					return nil, err
+				}
+				lockfiles[phpVendorChecksumKey] = checksum
+			}
+		}
 		decision := EcosystemDecision{
 			Ecosystem: ecosystem,
 			StateKey:  stateKey,
 			Decision:  DecisionUpdate,
 			Reason:    "missing prior lockfile hash",
 			Lockfiles: lockfiles,
-		}
-
-		ecosystemState, hasState := current.Ecosystems[stateKey]
-		if !hasState && (result.Directory == "" || result.Directory == ".") {
-			ecosystemState, hasState = current.Ecosystems[ecosystem]
 		}
 		if hasState && len(ecosystemState.Lockfiles) > 0 {
 			if lockfilesEqual(ecosystemState.Lockfiles, lockfiles) {
@@ -80,6 +94,90 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 	}
 
 	return decisions, nil
+}
+
+func shouldTrackPHPVendor(dir string, result detection.DetectionResult, ecosystemState state.EcosystemState, hasState bool) (bool, error) {
+	vendorPath := phpVendorPath(dir, result)
+	vendorExists, err := isDirectory(vendorPath)
+	if err != nil {
+		return false, fmt.Errorf("stat php vendor directory: %w", err)
+	}
+	if vendorExists {
+		return true, nil
+	}
+
+	if !hasState {
+		return false, nil
+	}
+
+	_, trackedVendor := ecosystemState.Lockfiles[phpVendorChecksumKey]
+	return trackedVendor, nil
+}
+
+func hashPHPVendorChecksum(dir string, result detection.DetectionResult) (string, error) {
+	hasher := sha256.New()
+	trackedPaths := []string{
+		"vendor",
+		"vendor/autoload.php",
+		"vendor/composer/installed.json",
+		"vendor/composer/installed.php",
+	}
+
+	for _, rel := range trackedPaths {
+		fullPath := filepath.Join(phpProjectPath(dir, result), filepath.FromSlash(rel))
+		if err := writeFingerprintEntry(hasher, rel, fullPath); err != nil {
+			return "", err
+		}
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func writeFingerprintEntry(hasher io.Writer, relPath string, fullPath string) error {
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			_, writeErr := io.WriteString(hasher, relPath+"|missing\n")
+			return writeErr
+		}
+		return fmt.Errorf("stat %q: %w", relPath, err)
+	}
+
+	if _, err := io.WriteString(hasher, fmt.Sprintf("%s|%d|%d|%s\n", relPath, info.Size(), info.ModTime().UTC().UnixNano(), info.Mode().String())); err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return nil
+	}
+
+	contentHash, err := hashFile(fullPath)
+	if err != nil {
+		return fmt.Errorf("hash %q: %w", relPath, err)
+	}
+	_, err = io.WriteString(hasher, contentHash+"\n")
+	return err
+}
+
+func phpVendorPath(dir string, result detection.DetectionResult) string {
+	return filepath.Join(phpProjectPath(dir, result), "vendor")
+}
+
+func phpProjectPath(dir string, result detection.DetectionResult) string {
+	if result.Directory == "" || result.Directory == "." {
+		return dir
+	}
+	return filepath.Join(dir, result.Directory)
+}
+
+func isDirectory(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return info.IsDir(), nil
 }
 
 func defaultGitSubmoduleStatus(dir string) ([]string, error) {

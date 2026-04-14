@@ -1,4 +1,18 @@
+github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
+github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
+github.com/bazelbuild/buildtools v0.0.0-20260211083412-859bfffeef82 h1:PmoVmwzAnGb0iCjulb7Mgsaqw2Wj36LQJ8VyYaFe/ak=
+github.com/bazelbuild/buildtools v0.0.0-20260211083412-859bfffeef82/go.mod h1:PLNUetjLa77TCCziPsz0EI8a6CUxgC+1jgmWv0H25tg=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
+github.com/git-pkgs/managers v0.8.2 h1:nFgUU6/Z8eguf3XcWlZ6ydDjsgvFzn7mV2aZVidHZYY=
+github.com/git-pkgs/managers v0.8.2/go.mod h1:8DR7tIQEEyPyJ7QGzStVbovnGl7tAJcrhQLzjQPzFzc=
+github.com/git-pkgs/manifests v0.4.3 h1:bjwWQiJ2Xqih/PjBCyJtt2bx9WqKjMq/YxoNSDUE8bQ=
+github.com/git-pkgs/manifests v0.4.3/go.mod h1:Jvvua5FVNvEFx+I5QQ8vbhHAz11gsMfrbocFCX/BvVo=
+github.com/git-pkgs/packageurl-go v0.3.1 h1:WM3RBABQZLaRBxgKyYughc3cVBE8KyQxbSC6Jt5ak7M=
+github.com/git-pkgs/packageurl-go v0.3.1/go.mod h1:rcIxiG37BlQLB6FZfgdj9Fm7yjhRQd3l+5o7J0QPAk4=
+github.com/git-pkgs/purl v0.1.10 h1:NMjeF10nzFn3tdQlz6rbmHB+i+YkyrFQxho3e33ePTQ=
+github.com/git-pkgs/purl v0.1.10/go.mod h1:C5Vp/kyZ/wGckCLexx4wPVfUxEiToRkdsOPh5Z7ig/I=
+github.com/git-pkgs/vers v0.2.4 h1:Zr3jR/Xf1i/6cvBaJKPxhCwjzqz7uvYHE0Fhid/GPBk=
+github.com/git-pkgs/vers v0.2.4/go.mod h1:biTbSQK1qdbrsxDEKnqe3Jzclxz8vW6uDcwKjfUGcOo=
 github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 h1:+zs/tPmkDkHx3U66DAb0lQFJrpS6731Oaa12ikc+DiI=
 github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376/go.mod h1:an3vInlBmSxCcxctByoQdvwPiA7DTK7jaaFDBTtu0ic=
 github.com/go-git/go-billy/v5 v5.8.0 h1:I8hjc3LbBlXTtVuFNJuwYuMiHvQJDq1AT6u4DwDzZG0=
@@ -30,3 +44,5 @@ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntN
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=
 gopkg.in/warnings.v0 v0.1.2 h1:wFXVbFY8DY5/xOe1ECiWdKCzZlxgshcYVNkBHstARME=
 gopkg.in/warnings.v0 v0.1.2/go.mod h1:jksf8JmL6Qr/oQM2OXTHunEvvTAsrWBLb6OOjuVWRNI=
+gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -18,24 +17,6 @@ import (
 	"github.com/aaronflorey/pupdate/internal/freshness"
 	"github.com/aaronflorey/pupdate/internal/state"
 )
-
-type runOutput struct {
-	Directory  string               `json:"directory"`
-	Ecosystems []runEcosystemOutput `json:"ecosystems"`
-	Warnings   []runWarningOutput   `json:"warnings"`
-}
-
-type runEcosystemOutput struct {
-	Ecosystem    string             `json:"ecosystem"`
-	Managers     []string           `json:"managers"`
-	MatchedFiles []string           `json:"matched_files"`
-	Warnings     []runWarningOutput `json:"warnings"`
-}
-
-type runWarningOutput struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
 
 func writeFixtureFiles(t *testing.T, dir string, files ...string) {
 	t.Helper()
@@ -66,15 +47,6 @@ func withChdir(t *testing.T, dir string) {
 	})
 }
 
-func parseRunOutput(t *testing.T, stdout bytes.Buffer) runOutput {
-	t.Helper()
-	var out runOutput
-	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
-		t.Fatalf("unmarshal run output: %v; raw=%q", err, stdout.String())
-	}
-	return out
-}
-
 func hashFileForTest(t *testing.T, path string) string {
 	t.Helper()
 	raw, err := os.ReadFile(path)
@@ -85,15 +57,11 @@ func hashFileForTest(t *testing.T, path string) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-func TestRunOutputsDeterministicMultiEcosystemJSON(t *testing.T) {
+func TestRunManualModeUsesHumanReadableStatusWithoutStdout(t *testing.T) {
 	disableInstall(t)
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir,
 		"bun.lock",
-		"composer.lock",
-		"requirements.txt",
-		"go.mod",
-		"cargo.lock",
 	)
 	withChdir(t, dir)
 
@@ -107,38 +75,11 @@ func TestRunOutputsDeterministicMultiEcosystemJSON(t *testing.T) {
 		t.Fatalf("run command failed: %v (stderr=%q)", err, stderr.String())
 	}
 
-	out := parseRunOutput(t, stdout)
-	if out.Directory != "." {
-		t.Fatalf("expected directory '.', got %q", out.Directory)
+	if stdout.Len() != 0 {
+		t.Fatalf("expected manual run to avoid stdout output, got %q", stdout.String())
 	}
-
-	expectedOrder := []string{"node", "php", "go", "rust", "python"}
-	if len(out.Ecosystems) != len(expectedOrder) {
-		t.Fatalf("expected %d ecosystems, got %d", len(expectedOrder), len(out.Ecosystems))
-	}
-	for i, expected := range expectedOrder {
-		if out.Ecosystems[i].Ecosystem != expected {
-			t.Fatalf("unexpected ecosystem order at %d: got %q want %q", i, out.Ecosystems[i].Ecosystem, expected)
-		}
-		if out.Ecosystems[i].MatchedFiles == nil || len(out.Ecosystems[i].MatchedFiles) == 0 {
-			t.Fatalf("ecosystem %q missing matched_files", out.Ecosystems[i].Ecosystem)
-		}
-	}
-
-	if !slices.Contains(out.Ecosystems[0].MatchedFiles, "bun.lock") {
-		t.Fatalf("node matched_files missing lockfiles: %#v", out.Ecosystems[0].MatchedFiles)
-	}
-	if !slices.Contains(out.Ecosystems[2].MatchedFiles, "go.mod") {
-		t.Fatalf("go matched_files missing go.mod: %#v", out.Ecosystems[2].MatchedFiles)
-	}
-	if !slices.Contains(out.Ecosystems[3].MatchedFiles, "cargo.lock") {
-		t.Fatalf("rust matched_files missing cargo.lock: %#v", out.Ecosystems[3].MatchedFiles)
-	}
-	if !slices.Contains(out.Ecosystems[4].MatchedFiles, "requirements.txt") {
-		t.Fatalf("python matched_files missing requirements.txt: %#v", out.Ecosystems[4].MatchedFiles)
-	}
-	if len(out.Warnings) != 0 {
-		t.Fatalf("expected no top-level warnings, got %#v", out.Warnings)
+	if !strings.Contains(stderr.String(), "pupdate: installs disabled via PUPDATE_SKIP_INSTALL") {
+		t.Fatalf("expected manual run status output, got %q", stderr.String())
 	}
 }
 
@@ -168,124 +109,6 @@ func TestRunReturnsDetectionFailedPrefixOnDetectorError(t *testing.T) {
 	combined := stdout.String() + stderr.String()
 	if !strings.Contains(combined, "detection failed:") && !strings.Contains(err.Error(), "detection failed:") {
 		t.Fatalf("expected command output to include detection failure prefix; stdout=%q stderr=%q err=%q", stdout.String(), stderr.String(), err.Error())
-	}
-}
-
-func TestRunOutputIncludesMatchedFilesFieldPerEcosystem(t *testing.T) {
-	disableInstall(t)
-	dir := t.TempDir()
-	writeFixtureFiles(t, dir, "composer.lock", "go.mod")
-	withChdir(t, dir)
-
-	var stdout bytes.Buffer
-	cmd := newRunCmd()
-	cmd.SetOut(&stdout)
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("run command failed: %v", err)
-	}
-
-	var raw map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &raw); err != nil {
-		t.Fatalf("unmarshal raw output: %v", err)
-	}
-	ecosystems, ok := raw["ecosystems"].([]any)
-	if !ok {
-		t.Fatalf("ecosystems missing or wrong type: %#v", raw["ecosystems"])
-	}
-	for i, item := range ecosystems {
-		obj, ok := item.(map[string]any)
-		if !ok {
-			t.Fatalf("ecosystem entry %d is not object: %#v", i, item)
-		}
-		if _, ok := obj["matched_files"]; !ok {
-			t.Fatalf("ecosystem entry %d missing matched_files: %#v", i, obj)
-		}
-	}
-}
-
-func TestRunOutputHasNoWarningsForSingleLockfile(t *testing.T) {
-	disableInstall(t)
-	dir := t.TempDir()
-	writeFixtureFiles(t, dir, "composer.lock")
-	withChdir(t, dir)
-
-	var stdout bytes.Buffer
-	cmd := newRunCmd()
-	cmd.SetOut(&stdout)
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("run command failed: %v", err)
-	}
-
-	out := parseRunOutput(t, stdout)
-	if len(out.Warnings) != 0 {
-		t.Fatalf("expected no top-level warnings, got %#v", out.Warnings)
-	}
-	if len(out.Ecosystems) != 1 || out.Ecosystems[0].Ecosystem != "php" {
-		t.Fatalf("expected only php ecosystem, got %#v", out.Ecosystems)
-	}
-	if len(out.Ecosystems[0].Warnings) != 0 {
-		t.Fatalf("expected no ecosystem warnings for go, got %#v", out.Ecosystems[0].Warnings)
-	}
-}
-
-func TestRunOutputIncludesNodeManagers(t *testing.T) {
-	disableInstall(t)
-	dir := t.TempDir()
-	writeFixtureFiles(t, dir, "bun.lock", "package-lock.json", "pnpm-lock.yaml", "yarn.lock")
-	withChdir(t, dir)
-
-	var stdout bytes.Buffer
-	cmd := newRunCmd()
-	cmd.SetOut(&stdout)
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("run command failed: %v", err)
-	}
-
-	out := parseRunOutput(t, stdout)
-	if len(out.Ecosystems) == 0 || out.Ecosystems[0].Ecosystem != "node" {
-		t.Fatalf("expected first ecosystem to be node, got %#v", out.Ecosystems)
-	}
-	managers := out.Ecosystems[0].Managers
-	if !slices.Equal(managers, []string{"bun", "npm", "pnpm", "yarn"}) {
-		t.Fatalf("expected node managers to include bun/npm/pnpm/yarn, got %#v", managers)
-	}
-}
-
-func TestRunOutputIncludesExpandedEcosystemManagers(t *testing.T) {
-	disableInstall(t)
-	dir := t.TempDir()
-	writeFixtureFiles(t, dir, "requirements.txt", "go.mod", "cargo.lock")
-	withChdir(t, dir)
-
-	var stdout bytes.Buffer
-	cmd := newRunCmd()
-	cmd.SetOut(&stdout)
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("run command failed: %v", err)
-	}
-
-	out := parseRunOutput(t, stdout)
-
-	var pythonManagers, goManagers, rustManagers []string
-	for _, ecosystem := range out.Ecosystems {
-		switch ecosystem.Ecosystem {
-		case "python":
-			pythonManagers = ecosystem.Managers
-		case "go":
-			goManagers = ecosystem.Managers
-		case "rust":
-			rustManagers = ecosystem.Managers
-		}
-	}
-
-	if !slices.Equal(pythonManagers, []string{"pip"}) {
-		t.Fatalf("expected python manager pip, got %#v", pythonManagers)
-	}
-	if !slices.Equal(goManagers, []string{"go"}) {
-		t.Fatalf("expected go manager list, got %#v", goManagers)
-	}
-	if !slices.Equal(rustManagers, []string{"cargo"}) {
-		t.Fatalf("expected rust manager list, got %#v", rustManagers)
 	}
 }
 
@@ -319,7 +142,7 @@ func TestRunPupignorePrintsSkipRepoAndSkipsInstalls(t *testing.T) {
 	}
 }
 
-func TestRunQuietStillPrintsStatusOnStderr(t *testing.T) {
+func TestRunQuietSuppressesSkipStatusOnStderr(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, ".pupignore")
 	withChdir(t, dir)
@@ -336,10 +159,85 @@ func TestRunQuietStillPrintsStatusOnStderr(t *testing.T) {
 	}
 
 	if stdout.Len() != 0 {
-		t.Fatalf("expected quiet run to suppress stdout payload, got %q", stdout.String())
+		t.Fatalf("expected quiet run to suppress stdout output, got %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "pupdate: skip repo (.pupignore)") {
-		t.Fatalf("expected quiet run to preserve stderr status output, got %q", stderr.String())
+	if stderr.Len() != 0 {
+		t.Fatalf("expected quiet run to stay silent when no update runs, got %q", stderr.String())
+	}
+}
+
+func TestRunSkipsHomeDirectoryInManualAndQuietModes(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	withChdir(t, homeDir)
+
+	var manualStdout bytes.Buffer
+	var manualStderr bytes.Buffer
+	manualCmd := newRootCmd()
+	manualCmd.SetArgs([]string{"run"})
+	manualCmd.SetOut(&manualStdout)
+	manualCmd.SetErr(&manualStderr)
+	if err := manualCmd.Execute(); err != nil {
+		t.Fatalf("manual run failed: %v", err)
+	}
+	if manualStdout.Len() != 0 {
+		t.Fatalf("expected manual home-directory skip to avoid stdout, got %q", manualStdout.String())
+	}
+	if !strings.Contains(manualStderr.String(), "pupdate: skip repo ($HOME)") {
+		t.Fatalf("expected manual home-directory skip status, got %q", manualStderr.String())
+	}
+
+	var quietStdout bytes.Buffer
+	var quietStderr bytes.Buffer
+	quietCmd := newRootCmd()
+	quietCmd.SetArgs([]string{"run", "--quiet"})
+	quietCmd.SetOut(&quietStdout)
+	quietCmd.SetErr(&quietStderr)
+	if err := quietCmd.Execute(); err != nil {
+		t.Fatalf("quiet run failed: %v", err)
+	}
+	if quietStdout.Len() != 0 {
+		t.Fatalf("expected quiet home-directory skip to avoid stdout, got %q", quietStdout.String())
+	}
+	if quietStderr.Len() != 0 {
+		t.Fatalf("expected quiet home-directory skip to stay silent, got %q", quietStderr.String())
+	}
+}
+
+func TestRunQuietPrintsRunAndDoneWhenUpdateRuns(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "package-lock.json")
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "true")
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--quiet"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("quiet run command failed: %v", err)
+	}
+
+	if stdout.Len() != 0 {
+		t.Fatalf("expected quiet run to avoid stdout, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts") {
+		t.Fatalf("expected quiet run line when update executes, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: done npm") {
+		t.Fatalf("expected quiet completion line when update succeeds, got %q", stderr.String())
 	}
 }
 
@@ -421,6 +319,9 @@ func TestRunUpdatesDepthOneSubdirectoryAndSavesNamespacedState(t *testing.T) {
 	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts (in frontend)") {
 		t.Fatalf("expected depth-1 run status line, got %q", stderr.String())
 	}
+	if !strings.Contains(stderr.String(), "pupdate: done npm (in frontend)") {
+		t.Fatalf("expected depth-1 completion status line, got %q", stderr.String())
+	}
 
 	stored, warnings, err := state.NewStore(dir).Load()
 	if err != nil {
@@ -480,6 +381,9 @@ func TestRunUpdatesPackagesChildAndSavesPackagesNamespacedState(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts (in packages/web)") {
 		t.Fatalf("expected packages child run status line, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: done npm (in packages/web)") {
+		t.Fatalf("expected packages child completion status line, got %q", stderr.String())
 	}
 
 	stored, warnings, err := state.NewStore(dir).Load()
@@ -728,6 +632,9 @@ func TestRunAllowScriptsUsesOptInFlags(t *testing.T) {
 	if !strings.Contains(stderr.String(), "pupdate: run npm ci") {
 		t.Fatalf("expected allow-scripts status line, got %q", stderr.String())
 	}
+	if !strings.Contains(stderr.String(), "pupdate: done npm") {
+		t.Fatalf("expected allow-scripts completion line, got %q", stderr.String())
+	}
 	if strings.Contains(stderr.String(), "--ignore-scripts") {
 		t.Fatalf("expected allow-scripts status line to omit script-blocking flag, got %q", stderr.String())
 	}
@@ -808,6 +715,9 @@ func TestRunPrintsRunLineForExpandedManagers(t *testing.T) {
 			if !strings.Contains(stderr.String(), runLine) {
 				t.Fatalf("expected run line %q, got %q", runLine, stderr.String())
 			}
+			if !strings.Contains(stderr.String(), "pupdate: done "+tt.manager) {
+				t.Fatalf("expected completion line for %s, got %q", tt.ecosystem, stderr.String())
+			}
 			if !strings.Contains(stderr.String(), "pupdate: run") {
 				t.Fatalf("expected run status output for %s", tt.ecosystem)
 			}
@@ -870,5 +780,8 @@ func TestRunExecutesGitSubmoduleUpdateWhenGitDecisionRequiresUpdate(t *testing.T
 	}
 	if !strings.Contains(stderr.String(), "pupdate: run git submodule update --init --recursive") {
 		t.Fatalf("expected git run status line, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: done git") {
+		t.Fatalf("expected git completion status line, got %q", stderr.String())
 	}
 }
