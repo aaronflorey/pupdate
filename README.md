@@ -8,6 +8,11 @@ and skips unnecessary installs when dependency files have not changed.
 It is built for shell-hook usage on `cd`, so the common path stays low-latency,
 safe by default, and easy to follow from concise stderr status output.
 
+Detection is backed by `github.com/git-pkgs/manifests`, and install command
+construction is backed by `github.com/git-pkgs/managers`, while `pupdate`
+preserves its existing traversal limits, local state flow, and safe default
+behavior.
+
 ## Install
 
 ```bash

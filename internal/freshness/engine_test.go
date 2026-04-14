@@ -112,6 +112,70 @@ func TestEvaluateEqualHashesSkips(t *testing.T) {
 	}
 }
 
+func TestEvaluatePHPVendorDriftRunsWhenLockfileUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "composer.lock", "same")
+	writeFile(t, dir, "vendor/composer/installed.php", "old")
+
+	current := state.Empty()
+	current.Ecosystems["php"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"composer.lock":      hashText("same"),
+			phpVendorChecksumKey: hashText("stale"),
+		},
+	}
+
+	results, err := Evaluate(
+		dir,
+		[]detection.DetectionResult{{
+			Ecosystem:    detection.EcosystemPHP,
+			MatchedFiles: []string{"composer.lock"},
+		}},
+		current,
+	)
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+
+	if results[0].Decision != DecisionUpdate {
+		t.Fatalf("expected DecisionUpdate, got %q", results[0].Decision)
+	}
+	if results[0].Reason != "dependency lockfiles changed since last successful run" {
+		t.Fatalf("expected changed-lockfiles reason, got %q", results[0].Reason)
+	}
+}
+
+func TestEvaluatePHPMissingVendorChecksumTriggersRefresh(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "composer.lock", "same")
+	writeFile(t, dir, "vendor/composer/installed.php", "same")
+
+	current := state.Empty()
+	current.Ecosystems["php"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"composer.lock": hashText("same"),
+		},
+	}
+
+	results, err := Evaluate(
+		dir,
+		[]detection.DetectionResult{{
+			Ecosystem:    detection.EcosystemPHP,
+			MatchedFiles: []string{"composer.lock"},
+		}},
+		current,
+	)
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+
+	if results[0].Decision != DecisionUpdate {
+		t.Fatalf("expected DecisionUpdate for missing vendor checksum migration, got %q", results[0].Decision)
+	}
+}
+
 func TestHasGitSubmoduleDrift(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -255,6 +319,9 @@ func TestEvaluateUsesNamespacedStateKeysForSubdirectories(t *testing.T) {
 func writeFile(t *testing.T, dir, rel, contents string) {
 	t.Helper()
 	path := filepath.Join(dir, rel)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir for %s: %v", rel, err)
+	}
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 		t.Fatalf("write %s: %v", rel, err)
 	}

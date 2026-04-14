@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/aaronflorey/pupdate/internal/detection"
+	"github.com/git-pkgs/managers"
+	"github.com/git-pkgs/managers/definitions"
 	"github.com/spf13/cobra"
 )
 
@@ -14,6 +18,12 @@ type managerPlan struct {
 	Manager string
 	Args    []string
 }
+
+var (
+	installTranslatorOnce sync.Once
+	installTranslator     *managers.Translator
+	installTranslatorErr  error
+)
 
 func runInstall(cmd *cobra.Command, quiet bool, workDir string, name string, args ...string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
@@ -35,24 +45,40 @@ func runInstall(cmd *cobra.Command, quiet bool, workDir string, name string, arg
 func selectManagerPlan(result detection.DetectionResult, allowScripts bool) (managerPlan, bool, string) {
 	switch result.Ecosystem {
 	case detection.EcosystemPHP:
-		args := []string{"install", "--no-interaction", "--prefer-dist"}
+		extra := []string{"--no-interaction", "--prefer-dist"}
 		if !allowScripts {
-			args = append(args, "--no-scripts")
+			extra = append(extra, "--no-scripts")
 		}
-		return managerPlan{Manager: "composer", Args: args}, true, ""
+		return buildInstallPlan("composer", managers.CommandInput{Extra: extra})
 	case detection.EcosystemNode:
 		if len(result.Managers) != 1 {
 			return managerPlan{}, false, "multiple Node lockfiles detected; skipping install"
 		}
 		switch result.Managers[0] {
 		case "bun":
-			return managerPlan{Manager: "bun", Args: nodeInstallArgs("install", "--frozen-lockfile", allowScripts)}, true, ""
+			input := managers.CommandInput{Flags: map[string]any{"frozen": true}}
+			if !allowScripts {
+				input.Extra = append(input.Extra, "--ignore-scripts")
+			}
+			return buildInstallPlan("bun", input)
 		case "npm":
-			return managerPlan{Manager: "npm", Args: nodeInstallArgs("ci", "", allowScripts)}, true, ""
+			input := managers.CommandInput{Flags: map[string]any{"frozen": true}}
+			if !allowScripts {
+				input.Extra = append(input.Extra, "--ignore-scripts")
+			}
+			return buildInstallPlan("npm", input)
 		case "pnpm":
-			return managerPlan{Manager: "pnpm", Args: nodeInstallArgs("install", "--frozen-lockfile", allowScripts)}, true, ""
+			input := managers.CommandInput{Flags: map[string]any{"frozen": true}}
+			if !allowScripts {
+				input.Extra = append(input.Extra, "--ignore-scripts")
+			}
+			return buildInstallPlan("pnpm", input)
 		case "yarn":
-			return managerPlan{Manager: "yarn", Args: nodeInstallArgs("install", "--frozen-lockfile", allowScripts)}, true, ""
+			input := managers.CommandInput{Flags: map[string]any{"frozen": true}}
+			if !allowScripts {
+				input.Extra = append(input.Extra, "--ignore-scripts")
+			}
+			return buildInstallPlan("yarn", input)
 		default:
 			return managerPlan{}, false, fmt.Sprintf("unsupported Node manager %q; skipping install", result.Managers[0])
 		}
@@ -62,18 +88,20 @@ func selectManagerPlan(result detection.DetectionResult, allowScripts bool) (man
 		}
 		switch result.Managers[0] {
 		case "uv":
-			return managerPlan{Manager: "uv", Args: []string{"sync", "--frozen"}}, true, ""
+			return buildInstallPlan("uv", managers.CommandInput{Flags: map[string]any{"frozen": true}})
 		case "poetry":
-			return managerPlan{Manager: "poetry", Args: []string{"install", "--no-interaction", "--sync"}}, true, ""
+			return buildInstallPlan("poetry", managers.CommandInput{
+				Extra: []string{"--no-interaction", "--sync"},
+			})
 		case "pip":
-			return managerPlan{Manager: "pip", Args: []string{"install", "-r", "requirements.txt", "--disable-pip-version-check", "--no-input"}}, true, ""
+			return buildInstallPlan("pip", managers.CommandInput{Extra: []string{"--disable-pip-version-check", "--no-input"}})
 		default:
 			return managerPlan{}, false, fmt.Sprintf("unsupported Python manager %q; skipping install", result.Managers[0])
 		}
 	case detection.EcosystemGo:
-		return managerPlan{Manager: "go", Args: []string{"mod", "download"}}, true, ""
+		return buildInstallPlan("gomod", managers.CommandInput{})
 	case detection.EcosystemRust:
-		return managerPlan{Manager: "cargo", Args: []string{"fetch", "--locked"}}, true, ""
+		return buildInstallPlan("cargo", managers.CommandInput{Flags: map[string]any{"locked": true}})
 	case detection.EcosystemGit:
 		return managerPlan{Manager: "git", Args: []string{"submodule", "update", "--init", "--recursive"}}, true, ""
 	default:
@@ -81,13 +109,43 @@ func selectManagerPlan(result detection.DetectionResult, allowScripts bool) (man
 	}
 }
 
-func nodeInstallArgs(command string, frozenFlag string, allowScripts bool) []string {
-	args := []string{command}
-	if frozenFlag != "" {
-		args = append(args, frozenFlag)
+func buildInstallPlan(managerName string, input managers.CommandInput) (managerPlan, bool, string) {
+	translator, err := loadInstallTranslator()
+	if err != nil {
+		return managerPlan{}, false, fmt.Sprintf("failed to load manager definitions: %v", err)
 	}
-	if !allowScripts {
-		args = append(args, "--ignore-scripts")
+
+	command, err := translator.BuildCommand(managerName, "install", input)
+	if err != nil {
+		return managerPlan{}, false, fmt.Sprintf("failed to build %s install command: %v", managerName, err)
 	}
-	return args
+	if len(command) == 0 {
+		return managerPlan{}, false, fmt.Sprintf("failed to build %s install command: empty command", managerName)
+	}
+
+	return managerPlan{Manager: command[0], Args: command[1:]}, true, ""
+}
+
+func loadInstallTranslator() (*managers.Translator, error) {
+	installTranslatorOnce.Do(func() {
+		defs, err := definitions.LoadEmbedded()
+		if err != nil {
+			installTranslatorErr = err
+			return
+		}
+
+		translator := managers.NewTranslator()
+		for _, def := range defs {
+			translator.Register(def)
+		}
+
+		if _, ok := translator.Definition("gomod"); !ok {
+			installTranslatorErr = errors.New("gomod definition not loaded")
+			return
+		}
+
+		installTranslator = translator
+	})
+
+	return installTranslator, installTranslatorErr
 }
