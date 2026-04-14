@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -15,6 +12,11 @@ func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Print shell integration script",
+		Long:  "Print the shell hook snippet for bash, zsh, or fish.",
+		Example: `eval "$(pupdate init --shell bash)"
+eval "$(pupdate init --shell zsh)"
+eval "$(pupdate init --shell fish)"`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolved, err := resolveShell(shell)
 			if err != nil {
@@ -33,27 +35,4 @@ func newInitCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&shell, "shell", "", "shell to configure (bash, zsh, or fish)")
 	return cmd
-}
-
-func resolveShell(requested string) (string, error) {
-	if requested != "" {
-		resolved := strings.ToLower(requested)
-		if isSupportedInitShell(resolved) {
-			return resolved, nil
-		}
-
-		return "", fmt.Errorf("unsupported shell %q; supported shells: %s", requested, supportedInitShellsText())
-	}
-
-	shell := filepath.Base(strings.TrimSpace(os.Getenv("SHELL")))
-	if shell == "" {
-		return "bash", nil
-	}
-
-	resolved := strings.ToLower(shell)
-	if isSupportedInitShell(resolved) {
-		return resolved, nil
-	}
-
-	return "bash", nil
 }
