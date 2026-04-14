@@ -20,22 +20,6 @@ func Detect(dir string) ([]DetectionResult, error) {
 		return nil, err
 	}
 
-	signalToEcosystem := map[string]Ecosystem{}
-	for ecosystem, signals := range ecosystemSignals {
-		for _, signal := range signals {
-			signalToEcosystem[signal] = ecosystem
-		}
-	}
-
-	order := []Ecosystem{
-		EcosystemNode,
-		EcosystemPHP,
-		EcosystemGo,
-		EcosystemRust,
-		EcosystemPython,
-		EcosystemGit,
-	}
-
 	results := []DetectionResult{}
 	for _, directory := range directories {
 		dirPath := dir
@@ -43,7 +27,7 @@ func Detect(dir string) ([]DetectionResult, error) {
 			dirPath = filepath.Join(dir, directory)
 		}
 
-		directoryResults, err := detectDirectory(dirPath, directory, signalToEcosystem, order)
+		directoryResults, err := detectDirectory(dirPath, directory)
 		if err != nil {
 			return nil, err
 		}
@@ -139,7 +123,7 @@ func shouldSkipDirectory(matcher ignoreMatcher, path string) bool {
 	return matcher.Match(parts, true)
 }
 
-func detectDirectory(dirPath string, relativeDir string, signalToEcosystem map[string]Ecosystem, order []Ecosystem) ([]DetectionResult, error) {
+func detectDirectory(dirPath string, relativeDir string) ([]DetectionResult, error) {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
@@ -183,11 +167,12 @@ func detectDirectory(dirPath string, relativeDir string, signalToEcosystem map[s
 			continue
 		}
 
-		name := strings.ToLower(filepath.Base(entry.Name()))
-		ecosystem, ok := signalToEcosystem[name]
+		signal, ok := detectSupportedSignal(filepath.Base(entry.Name()))
 		if !ok {
 			continue
 		}
+		name := signal.name
+		ecosystem := signal.ecosystem
 
 		if !fileSeen[ecosystem][name] {
 			fileSeen[ecosystem][name] = true
@@ -197,16 +182,14 @@ func detectDirectory(dirPath string, relativeDir string, signalToEcosystem map[s
 				filesByEcosystem[ecosystem] = append(filesByEcosystem[ecosystem], filepath.ToSlash(filepath.Join(relativeDir, name)))
 			}
 		}
-		if ecosystemManagers, hasEcosystem := managerBySignal[ecosystem]; hasEcosystem {
-			if manager, hasManager := ecosystemManagers[name]; hasManager && !managerSeen[ecosystem][manager] {
-				managerSeen[ecosystem][manager] = true
-				managersByEcosystem[ecosystem] = append(managersByEcosystem[ecosystem], manager)
-			}
+		if signal.manager != "" && !managerSeen[ecosystem][signal.manager] {
+			managerSeen[ecosystem][signal.manager] = true
+			managersByEcosystem[ecosystem] = append(managersByEcosystem[ecosystem], signal.manager)
 		}
 	}
 
 	var results []DetectionResult
-	for _, ecosystem := range order {
+	for _, ecosystem := range ecosystemOrder {
 		matched := filesByEcosystem[ecosystem]
 		if len(matched) == 0 {
 			continue
