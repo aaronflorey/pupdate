@@ -1,0 +1,197 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/aaronflorey/pupdate/internal/detection"
+	"github.com/aaronflorey/pupdate/internal/freshness"
+	"github.com/aaronflorey/pupdate/internal/state"
+	"github.com/spf13/cobra"
+)
+
+type runExecution struct {
+	Results             []detection.DetectionResult
+	Store               state.Store
+	CurrentState        state.FileState
+	DecisionByEcosystem map[string]freshness.EcosystemDecision
+}
+
+func executeRun(cmd *cobra.Command, options runOptions) error {
+	execution, err := prepareRunExecution(cmd)
+	if err != nil {
+		return err
+	}
+
+	if err := writeRunPayload(cmd, options.Quiet, execution.Results); err != nil {
+		return err
+	}
+
+	ignored, err := hasPupIgnore(".")
+	if err != nil {
+		return fmt.Errorf("failed to check .pupignore: %w", err)
+	}
+	if ignored {
+		fmt.Fprintln(cmd.ErrOrStderr(), "pupdate: skip repo (.pupignore)")
+		return nil
+	}
+
+	installDisabled := isInstallDisabled()
+	if installDisabled {
+		fmt.Fprintln(cmd.ErrOrStderr(), "pupdate: installs disabled via PUPDATE_SKIP_INSTALL")
+	}
+
+	outcomes := executeRunResults(cmd, execution.Results, execution.DecisionByEcosystem, options, installDisabled)
+	return saveSuccessfulRunOutcomes(execution.Store, execution.CurrentState, outcomes)
+}
+
+func prepareRunExecution(cmd *cobra.Command) (runExecution, error) {
+	results, err := detectFn(".")
+	if err != nil {
+		return runExecution{}, fmt.Errorf("detection failed: %w", err)
+	}
+
+	store := state.NewStore(".")
+	currentState, warnings, err := store.Load()
+	if err != nil {
+		return runExecution{}, fmt.Errorf("failed to load state: %w", err)
+	}
+	for _, warning := range warnings {
+		fmt.Fprintln(cmd.ErrOrStderr(), "pupdate:", warning)
+	}
+
+	decisions, err := evaluateFreshnessFn(".", results, currentState)
+	if err != nil {
+		return runExecution{}, fmt.Errorf("failed to evaluate dependency freshness: %w", err)
+	}
+
+	return runExecution{
+		Results:             results,
+		Store:               store,
+		CurrentState:        currentState,
+		DecisionByEcosystem: indexDecisionsByEcosystem(decisions),
+	}, nil
+}
+
+func indexDecisionsByEcosystem(decisions []freshness.EcosystemDecision) map[string]freshness.EcosystemDecision {
+	indexed := make(map[string]freshness.EcosystemDecision, len(decisions))
+	for _, decision := range decisions {
+		indexed[decision.StateKey] = decision
+	}
+	return indexed
+}
+
+func executeRunResults(
+	cmd *cobra.Command,
+	results []detection.DetectionResult,
+	decisionByEcosystem map[string]freshness.EcosystemDecision,
+	options runOptions,
+	installDisabled bool,
+) []ecosystemOutcome {
+	outcomes := make([]ecosystemOutcome, 0, len(results))
+	for _, result := range results {
+		decision, ok := decisionByEcosystem[result.StateKey()]
+		if !ok {
+			continue
+		}
+
+		outcome, ok := executeRunResult(cmd, result, decision, options, installDisabled)
+		if ok {
+			outcomes = append(outcomes, outcome)
+		}
+	}
+	return outcomes
+}
+
+func executeRunResult(
+	cmd *cobra.Command,
+	result detection.DetectionResult,
+	decision freshness.EcosystemDecision,
+	options runOptions,
+	installDisabled bool,
+) (ecosystemOutcome, bool) {
+	target := resultTarget(result)
+	if decision.Decision != freshness.DecisionUpdate {
+		printSkipDecision(cmd, result, decision, target)
+		return ecosystemOutcome{}, false
+	}
+	if installDisabled {
+		return ecosystemOutcome{}, false
+	}
+
+	plan, ok, reason := selectManagerPlan(result, options.AllowScripts)
+	if !ok {
+		if reason != "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), "pupdate:", reason)
+		}
+		return ecosystemOutcome{}, false
+	}
+
+	if _, err := lookPath(plan.Manager); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s not found on PATH)\n", target, plan.Manager)
+		return ecosystemOutcome{}, false
+	}
+
+	fmt.Fprintln(cmd.ErrOrStderr(), formatRunLine(result, plan))
+	err := runInstall(cmd, options.Quiet, filepath.Join(".", result.Directory), plan.Manager, plan.Args...)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s install failed: %v\n", plan.Manager, err)
+	}
+
+	return ecosystemOutcome{
+		StateKey:  result.StateKey(),
+		Succeeded: err == nil,
+		Lockfiles: decision.Lockfiles,
+	}, true
+}
+
+func printSkipDecision(cmd *cobra.Command, result detection.DetectionResult, decision freshness.EcosystemDecision, target string) {
+	if result.Ecosystem == detection.EcosystemGit && strings.HasPrefix(decision.Reason, "git submodule status failed:") {
+		fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s\n", decision.Reason)
+		return
+	}
+
+	reason := decision.Reason
+	if reason == "" {
+		reason = "up-to-date"
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s)\n", target, reason)
+}
+
+func formatRunLine(result detection.DetectionResult, plan managerPlan) string {
+	runLine := fmt.Sprintf("pupdate: run %s %s", plan.Manager, strings.Join(plan.Args, " "))
+	if result.Directory != "" && result.Directory != "." {
+		runLine += fmt.Sprintf(" (in %s)", result.Directory)
+	}
+	return runLine
+}
+
+func hasPupIgnore(dir string) (bool, error) {
+	path := filepath.Join(dir, ".pupignore")
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return !info.IsDir(), nil
+}
+
+func resultTarget(result detection.DetectionResult) string {
+	if result.Directory == "" || result.Directory == "." {
+		return string(result.Ecosystem)
+	}
+	return fmt.Sprintf("%s:%s", result.Ecosystem, result.Directory)
+}
+
+func isInstallDisabled() bool {
+	value := strings.TrimSpace(os.Getenv("PUPDATE_SKIP_INSTALL"))
+	if value == "" {
+		return false
+	}
+	value = strings.ToLower(value)
+	return value == "1" || value == "true" || value == "yes"
+}
