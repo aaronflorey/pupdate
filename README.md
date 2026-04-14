@@ -16,6 +16,11 @@ bin install github.com/aaronflorey/pupdate
 
 Requires [`bin`](https://github.com/aaronflorey/bin) to be installed and available on `PATH`.
 
+## Project Docs
+
+- Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Security policy: [`SECURITY.md`](SECURITY.md)
+
 ## Quick Start
 
 Run manually in a project:
