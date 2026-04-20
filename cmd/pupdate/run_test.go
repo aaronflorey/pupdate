@@ -57,6 +57,14 @@ func hashFileForTest(t *testing.T, path string) string {
 	return fmt.Sprintf("%x", sum)
 }
 
+func assertSameDirectory(t *testing.T, expected string, actual string) {
+	t.Helper()
+	if sameDirectory(expected, actual) {
+		return
+	}
+	t.Fatalf("expected install command to run in %q, got %q", expected, actual)
+}
+
 func TestRunManualModeUsesHumanReadableStatusWithoutStdout(t *testing.T) {
 	disableInstall(t)
 	dir := t.TempDir()
@@ -313,9 +321,7 @@ func TestRunUpdatesDepthOneSubdirectoryAndSavesNamespacedState(t *testing.T) {
 		t.Fatalf("read ran_dir output: %v", err)
 	}
 	ranDir := strings.TrimSpace(string(ranDirRaw))
-	if ranDir != frontendDir {
-		t.Fatalf("expected install command to run in %q, got %q", frontendDir, ranDir)
-	}
+	assertSameDirectory(t, frontendDir, ranDir)
 	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts (in frontend)") {
 		t.Fatalf("expected depth-1 run status line, got %q", stderr.String())
 	}
@@ -376,9 +382,7 @@ func TestRunUpdatesPackagesChildAndSavesPackagesNamespacedState(t *testing.T) {
 		t.Fatalf("read ran_dir output: %v", err)
 	}
 	ranDir := strings.TrimSpace(string(ranDirRaw))
-	if ranDir != packageDir {
-		t.Fatalf("expected install command to run in %q, got %q", packageDir, ranDir)
-	}
+	assertSameDirectory(t, packageDir, ranDir)
 	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts (in packages/web)") {
 		t.Fatalf("expected packages child run status line, got %q", stderr.String())
 	}
