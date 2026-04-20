@@ -1,5 +1,9 @@
 # pupdate
 
+[![CI](https://github.com/aaronflorey/pupdate/actions/workflows/ci.yml/badge.svg)](https://github.com/aaronflorey/pupdate/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/aaronflorey/pupdate?sort=semver)](https://github.com/aaronflorey/pupdate/releases)
+[![License](https://img.shields.io/github/license/aaronflorey/pupdate)](LICENSE)
+
 `pupdate` is a fast Go CLI that keeps project dependencies up to date when you
 enter a repository. It detects dependency ecosystems in the current directory and
 depth-1 subdirectories, runs the matching package manager when work is needed,
@@ -24,7 +28,15 @@ Requires [`bin`](https://github.com/aaronflorey/bin) to be installed and availab
 ## Project Docs
 
 - Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Code of conduct: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 - Security policy: [`SECURITY.md`](SECURITY.md)
+
+## Release and CI
+
+- CI runs on pull requests and pushes to `main` across Linux, macOS, and Windows.
+- `release-please` maintains changelog and semver release PRs.
+- GoReleaser publishes tagged release binaries and updates Homebrew tap artifacts.
+- Release notes are published on the [GitHub Releases page](https://github.com/aaronflorey/pupdate/releases).
 
 ## Quick Start
 

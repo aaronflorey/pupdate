@@ -36,3 +36,8 @@ go test ./cmd/pupdate -count=1
 - Update tests when behavior changes.
 - Update `README.md` when flags, output, or setup steps change.
 - Call out any cross-platform or shell-specific behavior in the PR description.
+- Use conventional commits (`feat:`, `fix:`, `chore:`) so release automation can classify changes.
+
+## Community
+
+By participating, you agree to follow [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
