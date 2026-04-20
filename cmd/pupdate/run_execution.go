@@ -235,5 +235,18 @@ func isHomeDirectory() (bool, error) {
 		return false, nil
 	}
 
-	return filepath.Clean(workingDir) == filepath.Clean(homeDir), nil
+	return sameDirectory(workingDir, homeDir), nil
+}
+
+func sameDirectory(left string, right string) bool {
+	return resolveDirectory(left) == resolveDirectory(right)
+}
+
+func resolveDirectory(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		path = resolved
+	}
+
+	return filepath.Clean(path)
 }
