@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/aaronflorey/pupdate/compare/v0.3.1...v0.4.0) (2026-04-22)
+
+
+### Features
+
+* **cli:** Quiet no-op runs and drop JSON output ([e0eb310](https://github.com/aaronflorey/pupdate/commit/e0eb310c64ba4bf8b001c02e3e9a5a71467e70b9))
+* **config:** Add root directory scoping and config inspect command ([799aaf7](https://github.com/aaronflorey/pupdate/commit/799aaf74245120a35888203dfd871ed02252b934))
+* **deps:** Integrate git-pkgs package tooling ([22223ef](https://github.com/aaronflorey/pupdate/commit/22223ef1690932ff58b5a9514538d80378ea41a9))
+
+
+### Bug Fixes
+
+* **ci:** Remove Windows and normalize macOS paths ([b68dcac](https://github.com/aaronflorey/pupdate/commit/b68dcac508d9cfa7c626c38ab44bf601499a4e15))
+* **config:** Use ~/.config path on macOS ([ce87058](https://github.com/aaronflorey/pupdate/commit/ce870584272c3bd4979d554783b30038a7e072ca))
+* **run:** Skip all phases when .pupignore exists ([f0efeca](https://github.com/aaronflorey/pupdate/commit/f0efecaae64193178eafed9287c4eee82585fae7))
+* **test:** Align config path assertion with resolver ([420f63b](https://github.com/aaronflorey/pupdate/commit/420f63bf7ac14324b3e58a64d5ec92fa3f2c93cd))
+* **test:** Normalize resolved config path assertion ([0b45c58](https://github.com/aaronflorey/pupdate/commit/0b45c58e40ca3bb828df4380153b30696b1c69a7))
+
 ## [0.3.1](https://github.com/aaronflorey/pupdate/compare/v0.3.0...v0.3.1) (2026-04-14)
 
 
