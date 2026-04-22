@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -113,7 +114,9 @@ func TestConfigReturnsParseErrorWhenYAMLIsInvalid(t *testing.T) {
 func TestConfigReturnsUserConfigDirResolutionError(t *testing.T) {
 	t.Cleanup(func() {
 		userConfigDir = os.UserConfigDir
+		runtimeGOOS = runtime.GOOS
 	})
+	runtimeGOOS = "linux"
 	userConfigDir = func() (string, error) {
 		return "", errors.New("boom")
 	}
