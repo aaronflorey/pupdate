@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -65,6 +66,9 @@ func TestResolveUserConfigResolvesRootDirectories(t *testing.T) {
 	withChdir(t, baseDir)
 	homeDir := filepath.Join(baseDir, "home")
 	t.Setenv("HOME", homeDir)
+	if err := os.MkdirAll(filepath.Join(baseDir, "workspace"), 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
 
 	configured := userConfig{
 		RootDirectories: []string{"~/code", "./workspace"},
