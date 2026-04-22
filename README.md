@@ -78,7 +78,7 @@ status when an update actually executes.
 - resolves manager binaries from your current `PATH`
 - skips work when dependency inputs are unchanged since the last successful run
 - stores local state in `.pupdate`
-- respects `.pupignore` to disable automatic runs in a repository
+- respects `.pupignore` to skip the full run (detection, freshness checks, and installs)
 - uses safe defaults and requires explicit opt-in for lifecycle scripts
 
 ## Supported Ecosystems
@@ -180,7 +180,7 @@ from shell history or logs.
 - Safe and frozen install modes are used by default where supported.
 - Lifecycle scripts are disabled by default where supported.
 - `--allow-scripts` is required to opt into lifecycle scripts.
-- `.pupignore` disables automatic runs for a repository.
+- `.pupignore` short-circuits the full run for a repository before detection and state checks.
 - `root_directory` can restrict runs to a specific directory tree.
 - Hook-driven runs remain non-blocking and avoid launching from `$HOME`.
 - Git submodule status failures are surfaced as stderr errors without crashing the command.
