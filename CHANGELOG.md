@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/aaronflorey/pupdate/compare/v0.4.0...v0.5.0) (2026-04-22)
+
+
+### Features
+
+* **config:** Support root directory lists and config bootstrap ([5a74999](https://github.com/aaronflorey/pupdate/commit/5a749990da7e7be58d03f69db80e6c13ec2dba69))
+
+
+### Bug Fixes
+
+* **test:** Stabilize root directory resolution on macOS ([91d77db](https://github.com/aaronflorey/pupdate/commit/91d77dbe41bf9cb06f72d96543e224cf6913127f))
+
 ## [0.4.0](https://github.com/aaronflorey/pupdate/compare/v0.3.1...v0.4.0) (2026-04-22)
 
 
