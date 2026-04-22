@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -22,6 +23,9 @@ func writeFixtureFiles(t *testing.T, dir string, files ...string) {
 	t.Helper()
 	for _, file := range files {
 		path := filepath.Join(dir, file)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(file), err)
+		}
 		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
 			t.Fatalf("write %s: %v", file, err)
 		}
@@ -209,6 +213,293 @@ func TestRunSkipsHomeDirectoryInManualAndQuietModes(t *testing.T) {
 	}
 	if quietStderr.Len() != 0 {
 		t.Fatalf("expected quiet home-directory skip to stay silent, got %q", quietStderr.String())
+	}
+}
+
+func TestRunSkipsHomeDirectoryWhenCurrentUserHomeFallbackMatches(t *testing.T) {
+	homeDir := t.TempDir()
+	withChdir(t, homeDir)
+
+	t.Cleanup(func() {
+		userHomeDir = os.UserHomeDir
+		currentUserHomeDir = func() (string, error) {
+			current, err := user.Current()
+			if err != nil {
+				return "", err
+			}
+			return current.HomeDir, nil
+		}
+	})
+
+	userHomeDir = func() (string, error) {
+		return filepath.Join(homeDir, "not-home"), nil
+	}
+	currentUserHomeDir = func() (string, error) {
+		return homeDir, nil
+	}
+
+	var manualStdout bytes.Buffer
+	var manualStderr bytes.Buffer
+	manualCmd := newRootCmd()
+	manualCmd.SetArgs([]string{"run"})
+	manualCmd.SetOut(&manualStdout)
+	manualCmd.SetErr(&manualStderr)
+	if err := manualCmd.Execute(); err != nil {
+		t.Fatalf("manual fallback run failed: %v", err)
+	}
+	if manualStdout.Len() != 0 {
+		t.Fatalf("expected manual fallback home-directory skip to avoid stdout, got %q", manualStdout.String())
+	}
+	if !strings.Contains(manualStderr.String(), "pupdate: skip repo ($HOME)") {
+		t.Fatalf("expected manual fallback home-directory skip status, got %q", manualStderr.String())
+	}
+
+	var quietStdout bytes.Buffer
+	var quietStderr bytes.Buffer
+	quietCmd := newRootCmd()
+	quietCmd.SetArgs([]string{"run", "--quiet"})
+	quietCmd.SetOut(&quietStdout)
+	quietCmd.SetErr(&quietStderr)
+	if err := quietCmd.Execute(); err != nil {
+		t.Fatalf("quiet fallback run failed: %v", err)
+	}
+	if quietStdout.Len() != 0 {
+		t.Fatalf("expected quiet fallback home-directory skip to avoid stdout, got %q", quietStdout.String())
+	}
+	if quietStderr.Len() != 0 {
+		t.Fatalf("expected quiet fallback home-directory skip to stay silent, got %q", quietStderr.String())
+	}
+}
+
+func TestRunSkipsOutsideConfiguredRootDirectory(t *testing.T) {
+	configHome := t.TempDir()
+	allowedRoot := filepath.Join(configHome, "workspace")
+	projectDir := t.TempDir()
+	writeFixtureFiles(t, configHome,
+		filepath.Join("pupdate", "config.yaml"),
+	)
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("root_directory: "+allowedRoot+"\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	withChdir(t, projectDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	if stdout.Len() != 0 {
+		t.Fatalf("expected restricted run to avoid stdout, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: skip repo (outside configured root_directory)") {
+		t.Fatalf("expected configured-root skip status, got %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "pupdate: installs disabled") {
+		t.Fatalf("expected early skip before install flow, got %q", stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(projectDir, ".pupdate")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected no state write when repo is outside configured root, err=%v", err)
+	}
+
+	var quietStdout bytes.Buffer
+	var quietStderr bytes.Buffer
+	quietCmd := newRootCmd()
+	quietCmd.SetArgs([]string{"run", "--quiet"})
+	quietCmd.SetOut(&quietStdout)
+	quietCmd.SetErr(&quietStderr)
+	if err := quietCmd.Execute(); err != nil {
+		t.Fatalf("quiet run failed: %v", err)
+	}
+	if quietStdout.Len() != 0 {
+		t.Fatalf("expected quiet restricted run to avoid stdout, got %q", quietStdout.String())
+	}
+	if quietStderr.Len() != 0 {
+		t.Fatalf("expected quiet restricted run to stay silent, got %q", quietStderr.String())
+	}
+}
+
+func TestRunAllowsProjectInsideConfiguredRootDirectoryWithHomeExpansion(t *testing.T) {
+	homeDir := t.TempDir()
+	projectDir := filepath.Join(homeDir, "src", "project")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	writeFixtureFiles(t, projectDir, "package-lock.json")
+	writeFixtureFiles(t, filepath.Join(homeDir, ".config"), filepath.Join("pupdate", "config.yaml"))
+	configPath := filepath.Join(homeDir, ".config", "pupdate", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("root_directory: ~/src\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(homeDir, ".config"))
+	withChdir(t, projectDir)
+
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "true")
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--quiet"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	if stdout.Len() != 0 {
+		t.Fatalf("expected quiet run to avoid stdout, got %q", stdout.String())
+	}
+	if strings.Contains(stderr.String(), "outside configured root_directory") {
+		t.Fatalf("expected configured root to allow project, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts") {
+		t.Fatalf("expected install to run inside configured root, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: done npm") {
+		t.Fatalf("expected install completion inside configured root, got %q", stderr.String())
+	}
+}
+
+func TestRunAllowsProjectInsideConfiguredRootDirectoryWhenSetToHomeShortcut(t *testing.T) {
+	homeDir := t.TempDir()
+	projectDir := filepath.Join(homeDir, "project")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	writeFixtureFiles(t, projectDir, "package-lock.json")
+	writeFixtureFiles(t, filepath.Join(homeDir, ".config"), filepath.Join("pupdate", "config.yaml"))
+	configPath := filepath.Join(homeDir, ".config", "pupdate", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("root_directory: ~\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(homeDir, ".config"))
+	withChdir(t, projectDir)
+
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "true")
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--quiet"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	if stdout.Len() != 0 {
+		t.Fatalf("expected quiet run to avoid stdout, got %q", stdout.String())
+	}
+	if strings.Contains(stderr.String(), "outside configured root_directory") {
+		t.Fatalf("expected root_directory=~ to allow project inside home, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts") {
+		t.Fatalf("expected install to run inside root_directory=~, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: done npm") {
+		t.Fatalf("expected install completion inside root_directory=~, got %q", stderr.String())
+	}
+}
+
+func TestRunReturnsParseErrorWhenYAMLIsInvalid(t *testing.T) {
+	configHome := t.TempDir()
+	projectDir := t.TempDir()
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("root_directory: [oops\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	withChdir(t, projectDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected run command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to parse "+configPath) {
+		t.Fatalf("expected parse error with config path, got %q", err.Error())
+	}
+}
+
+func TestRunReturnsUserConfigDirResolutionError(t *testing.T) {
+	dir := t.TempDir()
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		userConfigDir = os.UserConfigDir
+	})
+	userConfigDir = func() (string, error) {
+		return "", errors.New("boom")
+	}
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected run command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to resolve user config directory: boom") {
+		t.Fatalf("expected config-dir resolution error, got %q", err.Error())
+	}
+}
+
+func TestRunReturnsReadErrorWhenConfigPathIsDirectory(t *testing.T) {
+	configHome := t.TempDir()
+	projectDir := t.TempDir()
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	if err := os.MkdirAll(configPath, 0o755); err != nil {
+		t.Fatalf("mkdir config path: %v", err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	withChdir(t, projectDir)
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected run command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to read "+configPath) {
+		t.Fatalf("expected read error with config path, got %q", err.Error())
 	}
 }
 

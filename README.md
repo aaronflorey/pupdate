@@ -105,7 +105,8 @@ Manager binaries are resolved from the current process `PATH`, which keeps
 ### `pupdate run`
 
 Detects supported ecosystems in the current directory and emits human-readable
-status lines on stderr. The command skips the user's home directory.
+status lines on stderr. The command skips the user's home directory and can be
+restricted to a configured root tree.
 
 Flags:
 
@@ -116,6 +117,11 @@ Environment:
 
 - `PUPDATE_SKIP_INSTALL=1`: disable installs while still running detection and status flow
 
+User config:
+
+- `~/.config/pupdate/config.yaml`
+- `root_directory: ~/src`: only run inside that directory tree; `~` expands to the user's home directory
+
 ### `pupdate init`
 
 Prints the shell hook snippet for `bash`, `zsh`, or `fish`.
@@ -123,6 +129,16 @@ Prints the shell hook snippet for `bash`, `zsh`, or `fish`.
 Flags:
 
 - `--shell <bash|zsh|fish>`: choose the shell explicitly
+
+### `pupdate config`
+
+Prints the resolved user config path and active config values.
+
+Output includes:
+
+- whether the config file currently exists
+- the configured `root_directory` value from the file
+- the resolved `root_directory` value after `~` expansion and path normalization
 
 ## How It Works
 
@@ -144,6 +160,7 @@ can react to submodule drift even when `.gitmodules` itself has not changed.
 Manual runs use stable, concise stderr prefixes:
 
 - `pupdate: skip repo ($HOME)`
+- `pupdate: skip repo (outside configured root_directory)`
 - `pupdate: skip repo (.pupignore)`
 - `pupdate: installs disabled via PUPDATE_SKIP_INSTALL`
 - `pupdate: skip <target> (<reason>)`
@@ -164,5 +181,6 @@ from shell history or logs.
 - Lifecycle scripts are disabled by default where supported.
 - `--allow-scripts` is required to opt into lifecycle scripts.
 - `.pupignore` disables automatic runs for a repository.
+- `root_directory` can restrict runs to a specific directory tree.
 - Hook-driven runs remain non-blocking and avoid launching from `$HOME`.
 - Git submodule status failures are surfaced as stderr errors without crashing the command.

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -19,6 +20,16 @@ type runExecution struct {
 	DecisionByEcosystem map[string]freshness.EcosystemDecision
 }
 
+var userHomeDir = os.UserHomeDir
+
+var currentUserHomeDir = func() (string, error) {
+	current, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	return current.HomeDir, nil
+}
+
 func executeRun(cmd *cobra.Command, options runOptions) error {
 	inHomeDir, err := isHomeDirectory()
 	if err != nil {
@@ -26,6 +37,15 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 	}
 	if inHomeDir {
 		printStatus(cmd, options.Quiet, "pupdate: skip repo ($HOME)")
+		return nil
+	}
+
+	restricted, err := isOutsideConfiguredRootDirectory()
+	if err != nil {
+		return err
+	}
+	if restricted {
+		printStatus(cmd, options.Quiet, "pupdate: skip repo (outside configured root_directory)")
 		return nil
 	}
 
@@ -50,6 +70,23 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 
 	outcomes := executeRunResults(cmd, execution.Results, execution.DecisionByEcosystem, options, installDisabled)
 	return saveSuccessfulRunOutcomes(execution.Store, execution.CurrentState, outcomes)
+}
+
+func isOutsideConfiguredRootDirectory() (bool, error) {
+	config, err := loadUserConfig()
+	if err != nil {
+		return false, err
+	}
+	if config.RootDirectory == "" {
+		return false, nil
+	}
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve working directory: %w", err)
+	}
+
+	return !isWithinDirectory(workingDir, config.RootDirectory), nil
 }
 
 func prepareRunExecution(cmd *cobra.Command, options runOptions) (runExecution, error) {
@@ -230,12 +267,41 @@ func isHomeDirectory() (bool, error) {
 		return false, fmt.Errorf("failed to resolve working directory: %w", err)
 	}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return false, nil
+	for _, homeDir := range homeDirectoryCandidates() {
+		if sameDirectory(workingDir, homeDir) {
+			return true, nil
+		}
 	}
 
-	return sameDirectory(workingDir, homeDir), nil
+	return false, nil
+}
+
+func homeDirectoryCandidates() []string {
+	candidates := make([]string, 0, 2)
+	seen := make(map[string]struct{}, 2)
+
+	if homeDir, err := userHomeDir(); err == nil && strings.TrimSpace(homeDir) != "" {
+		cleaned := resolveDirectory(homeDir)
+		candidates = appendUniqueDirectory(candidates, seen, cleaned)
+	}
+
+	if homeDir, err := currentUserHomeDir(); err == nil && strings.TrimSpace(homeDir) != "" {
+		cleaned := resolveDirectory(homeDir)
+		candidates = appendUniqueDirectory(candidates, seen, cleaned)
+	}
+
+	return candidates
+}
+
+func appendUniqueDirectory(candidates []string, seen map[string]struct{}, dir string) []string {
+	if dir == "" {
+		return candidates
+	}
+	if _, ok := seen[dir]; ok {
+		return candidates
+	}
+	seen[dir] = struct{}{}
+	return append(candidates, dir)
 }
 
 func sameDirectory(left string, right string) bool {
