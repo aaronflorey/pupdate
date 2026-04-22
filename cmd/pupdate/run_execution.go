@@ -49,11 +49,6 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 		return nil
 	}
 
-	execution, err := prepareRunExecution(cmd, options)
-	if err != nil {
-		return err
-	}
-
 	ignored, err := hasPupIgnore(".")
 	if err != nil {
 		return fmt.Errorf("failed to check .pupignore: %w", err)
@@ -61,6 +56,11 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 	if ignored {
 		printStatus(cmd, options.Quiet, "pupdate: skip repo (.pupignore)")
 		return nil
+	}
+
+	execution, err := prepareRunExecution(cmd, options)
+	if err != nil {
+		return err
 	}
 
 	installDisabled := isInstallDisabled()
