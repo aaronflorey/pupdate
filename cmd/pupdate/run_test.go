@@ -96,6 +96,37 @@ func TestRunManualModeUsesHumanReadableStatusWithoutStdout(t *testing.T) {
 	}
 }
 
+func TestRunCreatesDefaultUserConfigWhenMissing(t *testing.T) {
+	disableInstall(t)
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock")
+	withChdir(t, dir)
+
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	if _, err := os.Stat(configPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected config path to start missing, err=%v", err)
+	}
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	rawConfig, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("expected run command to create default user config: %v", err)
+	}
+	if string(rawConfig) != defaultUserConfigContent {
+		t.Fatalf("expected default config content %q, got %q", defaultUserConfigContent, string(rawConfig))
+	}
+}
+
 func TestRunReturnsDetectionFailedPrefixOnDetectorError(t *testing.T) {
 	disableInstall(t)
 	t.Cleanup(func() {
@@ -338,7 +369,7 @@ func TestRunSkipsHomeDirectoryWhenCurrentUserHomeFallbackMatches(t *testing.T) {
 	}
 }
 
-func TestRunSkipsOutsideConfiguredRootDirectory(t *testing.T) {
+func TestRunSkipsOutsideConfiguredRootDirectories(t *testing.T) {
 	configHome := t.TempDir()
 	allowedRoot := filepath.Join(configHome, "workspace")
 	projectDir := t.TempDir()
@@ -346,7 +377,7 @@ func TestRunSkipsOutsideConfiguredRootDirectory(t *testing.T) {
 		filepath.Join("pupdate", "config.yaml"),
 	)
 	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
-	if err := os.WriteFile(configPath, []byte("root_directory: "+allowedRoot+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - "+allowedRoot+"\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("XDG_CONFIG_HOME", configHome)
@@ -365,7 +396,7 @@ func TestRunSkipsOutsideConfiguredRootDirectory(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Fatalf("expected restricted run to avoid stdout, got %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "pupdate: skip repo (outside configured root_directory)") {
+	if !strings.Contains(stderr.String(), "pupdate: skip repo (outside configured root_directories)") {
 		t.Fatalf("expected configured-root skip status, got %q", stderr.String())
 	}
 	if strings.Contains(stderr.String(), "pupdate: installs disabled") {
@@ -392,7 +423,7 @@ func TestRunSkipsOutsideConfiguredRootDirectory(t *testing.T) {
 	}
 }
 
-func TestRunAllowsProjectInsideConfiguredRootDirectoryWithHomeExpansion(t *testing.T) {
+func TestRunAllowsTopLevelProjectInsideConfiguredRootDirectoriesWithHomeExpansion(t *testing.T) {
 	homeDir := t.TempDir()
 	projectDir := filepath.Join(homeDir, "src", "project")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
@@ -401,7 +432,7 @@ func TestRunAllowsProjectInsideConfiguredRootDirectoryWithHomeExpansion(t *testi
 	writeFixtureFiles(t, projectDir, "package-lock.json")
 	writeFixtureFiles(t, filepath.Join(homeDir, ".config"), filepath.Join("pupdate", "config.yaml"))
 	configPath := filepath.Join(homeDir, ".config", "pupdate", "config.yaml")
-	if err := os.WriteFile(configPath, []byte("root_directory: ~/src\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/src\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("HOME", homeDir)
@@ -432,7 +463,7 @@ func TestRunAllowsProjectInsideConfiguredRootDirectoryWithHomeExpansion(t *testi
 	if stdout.Len() != 0 {
 		t.Fatalf("expected quiet run to avoid stdout, got %q", stdout.String())
 	}
-	if strings.Contains(stderr.String(), "outside configured root_directory") {
+	if strings.Contains(stderr.String(), "outside configured root_directories") {
 		t.Fatalf("expected configured root to allow project, got %q", stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts") {
@@ -443,7 +474,7 @@ func TestRunAllowsProjectInsideConfiguredRootDirectoryWithHomeExpansion(t *testi
 	}
 }
 
-func TestRunAllowsProjectInsideConfiguredRootDirectoryWhenSetToHomeShortcut(t *testing.T) {
+func TestRunAllowsTopLevelProjectInsideConfiguredRootDirectoriesWhenSetToHomeShortcut(t *testing.T) {
 	homeDir := t.TempDir()
 	projectDir := filepath.Join(homeDir, "project")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
@@ -452,7 +483,7 @@ func TestRunAllowsProjectInsideConfiguredRootDirectoryWhenSetToHomeShortcut(t *t
 	writeFixtureFiles(t, projectDir, "package-lock.json")
 	writeFixtureFiles(t, filepath.Join(homeDir, ".config"), filepath.Join("pupdate", "config.yaml"))
 	configPath := filepath.Join(homeDir, ".config", "pupdate", "config.yaml")
-	if err := os.WriteFile(configPath, []byte("root_directory: ~\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("HOME", homeDir)
@@ -483,14 +514,82 @@ func TestRunAllowsProjectInsideConfiguredRootDirectoryWhenSetToHomeShortcut(t *t
 	if stdout.Len() != 0 {
 		t.Fatalf("expected quiet run to avoid stdout, got %q", stdout.String())
 	}
-	if strings.Contains(stderr.String(), "outside configured root_directory") {
-		t.Fatalf("expected root_directory=~ to allow project inside home, got %q", stderr.String())
+	if strings.Contains(stderr.String(), "outside configured root_directories") {
+		t.Fatalf("expected root_directories=[~] to allow project inside home, got %q", stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts") {
-		t.Fatalf("expected install to run inside root_directory=~, got %q", stderr.String())
+		t.Fatalf("expected install to run inside root_directories=[~], got %q", stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "pupdate: done npm") {
-		t.Fatalf("expected install completion inside root_directory=~, got %q", stderr.String())
+		t.Fatalf("expected install completion inside root_directories=[~], got %q", stderr.String())
+	}
+}
+
+func TestRunSkipsConfiguredRootDirectoryItself(t *testing.T) {
+	homeDir := t.TempDir()
+	rootDir := filepath.Join(homeDir, "code")
+	if err := os.MkdirAll(rootDir, 0o755); err != nil {
+		t.Fatalf("mkdir root dir: %v", err)
+	}
+	writeFixtureFiles(t, filepath.Join(homeDir, ".config"), filepath.Join("pupdate", "config.yaml"))
+	configPath := filepath.Join(homeDir, ".config", "pupdate", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/code\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(homeDir, ".config"))
+	withChdir(t, rootDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	if stdout.Len() != 0 {
+		t.Fatalf("expected root directory run to avoid stdout, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: skip repo (outside configured root_directories)") {
+		t.Fatalf("expected root directory to be skipped, got %q", stderr.String())
+	}
+}
+
+func TestRunSkipsNestedDirectoryWithinConfiguredRootDirectory(t *testing.T) {
+	homeDir := t.TempDir()
+	projectRoot := filepath.Join(homeDir, "code", "my-project")
+	nestedDir := filepath.Join(projectRoot, "nested")
+	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		t.Fatalf("mkdir nested dir: %v", err)
+	}
+	writeFixtureFiles(t, projectRoot, "package-lock.json")
+	writeFixtureFiles(t, filepath.Join(homeDir, ".config"), filepath.Join("pupdate", "config.yaml"))
+	configPath := filepath.Join(homeDir, ".config", "pupdate", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/code\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(homeDir, ".config"))
+	withChdir(t, nestedDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	if stdout.Len() != 0 {
+		t.Fatalf("expected nested directory run to avoid stdout, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: skip repo (outside configured root_directories)") {
+		t.Fatalf("expected nested directory to be skipped, got %q", stderr.String())
 	}
 }
 
@@ -499,7 +598,7 @@ func TestRunReturnsParseErrorWhenYAMLIsInvalid(t *testing.T) {
 	projectDir := t.TempDir()
 	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
 	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
-	if err := os.WriteFile(configPath, []byte("root_directory: [oops\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("root_directories: [oops\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("XDG_CONFIG_HOME", configHome)

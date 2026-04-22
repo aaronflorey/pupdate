@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -19,6 +19,10 @@ func newConfigCmd() *cobra.Command {
 				return err
 			}
 
+			if err := ensureUserConfigExists(path); err != nil {
+				return err
+			}
+
 			rawConfig, err := readUserConfig(path)
 			if err != nil {
 				return err
@@ -29,17 +33,11 @@ func newConfigCmd() *cobra.Command {
 				return err
 			}
 
-			_, statErr := os.Stat(path)
-			exists := statErr == nil
-			if statErr != nil && !os.IsNotExist(statErr) {
-				return fmt.Errorf("failed to stat %s: %w", path, statErr)
-			}
-
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "path: %s\nexists: %t\nroot_directory: %s\nroot_directory_resolved: %s\n",
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "path: %s\nexists: %t\nroot_directories: %s\nroot_directories_resolved: %s\n",
 				path,
-				exists,
-				displayConfigValue(rawConfig.RootDirectory),
-				displayConfigValue(resolvedConfig.RootDirectory),
+				true,
+				displayConfigValues(rawConfig.RootDirectories),
+				displayConfigValues(resolvedConfig.RootDirectories),
 			)
 			return err
 		},
@@ -48,10 +46,10 @@ func newConfigCmd() *cobra.Command {
 	return cmd
 }
 
-func displayConfigValue(value string) string {
-	if value == "" {
+func displayConfigValues(values []string) string {
+	if len(values) == 0 {
 		return "(not set)"
 	}
 
-	return value
+	return strings.Join(values, ", ")
 }

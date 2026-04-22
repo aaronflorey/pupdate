@@ -12,9 +12,10 @@ import (
 )
 
 const configFileName = "config.yaml"
+const defaultUserConfigContent = "root_directories: []\n"
 
 type userConfig struct {
-	RootDirectory string `yaml:"root_directory"`
+	RootDirectories []string `yaml:"root_directories"`
 }
 
 var userConfigDir = os.UserConfigDir
@@ -69,14 +70,41 @@ func readUserConfig(path string) (userConfig, error) {
 	return cfg, nil
 }
 
-func resolveUserConfig(cfg userConfig) (userConfig, error) {
+func ensureUserConfigExists(path string) error {
+	configDir := filepath.Dir(path)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create config directory %s: %w", configDir, err)
+	}
 
-	if cfg.RootDirectory != "" {
-		resolved, err := expandConfiguredDirectory(cfg.RootDirectory)
-		if err != nil {
-			return userConfig{}, fmt.Errorf("failed to resolve root_directory: %w", err)
+	_, err := os.Stat(path)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to stat %s: %w", path, err)
+	}
+
+	if err := os.WriteFile(path, []byte(defaultUserConfigContent), 0o644); err != nil {
+		return fmt.Errorf("failed to create %s: %w", path, err)
+	}
+
+	return nil
+}
+
+func resolveUserConfig(cfg userConfig) (userConfig, error) {
+	if len(cfg.RootDirectories) > 0 {
+		resolvedDirectories := make([]string, 0, len(cfg.RootDirectories))
+		for index, configuredRoot := range cfg.RootDirectories {
+			resolved, err := expandConfiguredDirectory(configuredRoot)
+			if err != nil {
+				return userConfig{}, fmt.Errorf("failed to resolve root_directories[%d]: %w", index, err)
+			}
+			if resolved == "" {
+				continue
+			}
+			resolvedDirectories = append(resolvedDirectories, resolved)
 		}
-		cfg.RootDirectory = resolved
+		cfg.RootDirectories = resolvedDirectories
 	}
 
 	return cfg, nil
@@ -85,6 +113,10 @@ func resolveUserConfig(cfg userConfig) (userConfig, error) {
 func loadUserConfig() (userConfig, error) {
 	path, err := resolveUserConfigPath()
 	if err != nil {
+		return userConfig{}, err
+	}
+
+	if err := ensureUserConfigExists(path); err != nil {
 		return userConfig{}, err
 	}
 
@@ -126,14 +158,11 @@ func expandConfiguredDirectory(path string) (string, error) {
 	return resolveDirectory(trimmed), nil
 }
 
-func isWithinDirectory(path string, root string) bool {
+func isTopLevelDirectoryWithinRoot(path string, root string) bool {
 	resolvedPath := resolveDirectory(path)
 	resolvedRoot := resolveDirectory(root)
-	if resolvedRoot == "" {
-		return true
-	}
-	if resolvedPath == resolvedRoot {
-		return true
+	if resolvedRoot == "" || resolvedPath == "" {
+		return false
 	}
 
 	rel, err := filepath.Rel(resolvedRoot, resolvedPath)
@@ -141,5 +170,9 @@ func isWithinDirectory(path string, root string) bool {
 		return false
 	}
 
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+
+	return !strings.Contains(rel, string(filepath.Separator))
 }

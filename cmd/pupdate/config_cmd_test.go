@@ -10,12 +10,12 @@ import (
 	"testing"
 )
 
-func TestConfigShowsPathAndResolvedRootDirectory(t *testing.T) {
+func TestConfigShowsPathAndResolvedRootDirectories(t *testing.T) {
 	homeDir := t.TempDir()
 	configHome := filepath.Join(homeDir, ".config")
 	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
 	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
-	if err := os.WriteFile(configPath, []byte("root_directory: ~/src\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/src\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("HOME", homeDir)
@@ -40,15 +40,15 @@ func TestConfigShowsPathAndResolvedRootDirectory(t *testing.T) {
 	if !strings.Contains(out, "exists: true") {
 		t.Fatalf("expected exists=true in output, got %q", out)
 	}
-	if !strings.Contains(out, "root_directory: ~/src") {
-		t.Fatalf("expected raw root_directory in output, got %q", out)
+	if !strings.Contains(out, "root_directories: ~/src") {
+		t.Fatalf("expected raw root_directories in output, got %q", out)
 	}
 	expectedResolvedRoot, err := expandConfiguredDirectory("~/src")
 	if err != nil {
-		t.Fatalf("resolve expected root_directory: %v", err)
+		t.Fatalf("resolve expected root_directories value: %v", err)
 	}
-	if !strings.Contains(out, "root_directory_resolved: "+expectedResolvedRoot) {
-		t.Fatalf("expected resolved root_directory in output, got %q", out)
+	if !strings.Contains(out, "root_directories_resolved: "+expectedResolvedRoot) {
+		t.Fatalf("expected resolved root_directories in output, got %q", out)
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
@@ -76,14 +76,22 @@ func TestConfigShowsUnsetValuesWhenConfigIsMissing(t *testing.T) {
 	if !strings.Contains(out, "path: "+expectedPath) {
 		t.Fatalf("expected missing config path in output, got %q", out)
 	}
-	if !strings.Contains(out, "exists: false") {
-		t.Fatalf("expected exists=false in output, got %q", out)
+	if !strings.Contains(out, "exists: true") {
+		t.Fatalf("expected exists=true in output, got %q", out)
 	}
-	if !strings.Contains(out, "root_directory: (not set)") {
-		t.Fatalf("expected unset root_directory in output, got %q", out)
+	if !strings.Contains(out, "root_directories: (not set)") {
+		t.Fatalf("expected unset root_directories in output, got %q", out)
 	}
-	if !strings.Contains(out, "root_directory_resolved: (not set)") {
-		t.Fatalf("expected unset resolved root_directory in output, got %q", out)
+	if !strings.Contains(out, "root_directories_resolved: (not set)") {
+		t.Fatalf("expected unset resolved root_directories in output, got %q", out)
+	}
+
+	rawConfig, err := os.ReadFile(expectedPath)
+	if err != nil {
+		t.Fatalf("expected command to create default config file: %v", err)
+	}
+	if string(rawConfig) != defaultUserConfigContent {
+		t.Fatalf("expected default config content %q, got %q", defaultUserConfigContent, string(rawConfig))
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
@@ -95,7 +103,7 @@ func TestConfigReturnsParseErrorWhenYAMLIsInvalid(t *testing.T) {
 	configHome := filepath.Join(homeDir, ".config")
 	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
 	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
-	if err := os.WriteFile(configPath, []byte("root_directory: [oops\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("root_directories: [oops\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("HOME", homeDir)
