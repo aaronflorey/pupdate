@@ -43,7 +43,8 @@ func TestConfigShowsPathAndResolvedRootDirectory(t *testing.T) {
 	if !strings.Contains(out, "root_directory: ~/src") {
 		t.Fatalf("expected raw root_directory in output, got %q", out)
 	}
-	if !strings.Contains(out, "root_directory_resolved: "+filepath.Join(homeDir, "src")) {
+	expectedResolvedRoot := resolveDirectory(filepath.Join(homeDir, "src"))
+	if !strings.Contains(out, "root_directory_resolved: "+expectedResolvedRoot) {
 		t.Fatalf("expected resolved root_directory in output, got %q", out)
 	}
 	if stderr.Len() != 0 {
