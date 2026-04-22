@@ -129,6 +129,24 @@ func TestRunPupignorePrintsSkipRepoAndSkipsInstalls(t *testing.T) {
 	writeFixtureFiles(t, dir, "bun.lock", ".pupignore")
 	withChdir(t, dir)
 
+	freshnessCalls := 0
+	t.Cleanup(func() {
+		evaluateFreshnessFn = freshness.Evaluate
+	})
+	evaluateFreshnessFn = func(string, []detection.DetectionResult, state.FileState) ([]freshness.EcosystemDecision, error) {
+		freshnessCalls++
+		return nil, errors.New("freshness should not run when .pupignore is present")
+	}
+
+	detectCalls := 0
+	t.Cleanup(func() {
+		detectFn = detection.Detect
+	})
+	detectFn = func(string) ([]detection.DetectionResult, error) {
+		detectCalls++
+		return nil, errors.New("detect should not run when .pupignore is present")
+	}
+
 	calls := 0
 	t.Cleanup(func() {
 		execCommand = exec.CommandContext
@@ -152,6 +170,54 @@ func TestRunPupignorePrintsSkipRepoAndSkipsInstalls(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("expected no install execution when .pupignore is present, got %d calls", calls)
 	}
+	if detectCalls != 0 {
+		t.Fatalf("expected no detection when .pupignore is present, got %d calls", detectCalls)
+	}
+	if freshnessCalls != 0 {
+		t.Fatalf("expected no freshness evaluation when .pupignore is present, got %d calls", freshnessCalls)
+	}
+}
+
+func TestHasPupIgnore(t *testing.T) {
+	t.Run("missing file", func(t *testing.T) {
+		dir := t.TempDir()
+
+		ignored, err := hasPupIgnore(dir)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if ignored {
+			t.Fatal("expected missing .pupignore to be treated as not ignored")
+		}
+	})
+
+	t.Run("regular file", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFixtureFiles(t, dir, ".pupignore")
+
+		ignored, err := hasPupIgnore(dir)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if !ignored {
+			t.Fatal("expected .pupignore file to disable run")
+		}
+	})
+
+	t.Run("directory", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.Mkdir(filepath.Join(dir, ".pupignore"), 0o755); err != nil {
+			t.Fatalf("make .pupignore directory: %v", err)
+		}
+
+		ignored, err := hasPupIgnore(dir)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if ignored {
+			t.Fatal("expected .pupignore directory to not be treated as ignore marker")
+		}
+	})
 }
 
 func TestRunQuietSuppressesSkipStatusOnStderr(t *testing.T) {
