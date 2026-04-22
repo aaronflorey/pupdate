@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -17,14 +18,38 @@ type userConfig struct {
 }
 
 var userConfigDir = os.UserConfigDir
+var runtimeGOOS = runtime.GOOS
 
 func resolveUserConfigPath() (string, error) {
+	configDir, err := resolveUserConfigDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(configDir, "pupdate", configFileName), nil
+}
+
+func resolveUserConfigDir() (string, error) {
+	if runtimeGOOS == "darwin" {
+		xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
+		if xdgConfigHome != "" {
+			return xdgConfigHome, nil
+		}
+
+		homeCandidates := homeDirectoryCandidates()
+		if len(homeCandidates) == 0 {
+			return "", fmt.Errorf("failed to resolve user home directory")
+		}
+
+		return filepath.Join(homeCandidates[0], ".config"), nil
+	}
+
 	configDir, err := userConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve user config directory: %w", err)
 	}
 
-	return filepath.Join(configDir, "pupdate", configFileName), nil
+	return configDir, nil
 }
 
 func readUserConfig(path string) (userConfig, error) {

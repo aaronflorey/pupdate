@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -526,7 +527,9 @@ func TestRunReturnsUserConfigDirResolutionError(t *testing.T) {
 
 	t.Cleanup(func() {
 		userConfigDir = os.UserConfigDir
+		runtimeGOOS = runtime.GOOS
 	})
+	runtimeGOOS = "linux"
 	userConfigDir = func() (string, error) {
 		return "", errors.New("boom")
 	}
