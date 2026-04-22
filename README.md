@@ -106,7 +106,7 @@ Manager binaries are resolved from the current process `PATH`, which keeps
 
 Detects supported ecosystems in the current directory and emits human-readable
 status lines on stderr. The command skips the user's home directory and can be
-restricted to a configured root tree.
+restricted to top-level project directories inside configured roots.
 
 Flags:
 
@@ -120,7 +120,8 @@ Environment:
 User config:
 
 - `~/.config/pupdate/config.yaml`
-- `root_directory: ~/src`: only run inside that directory tree; `~` expands to the user's home directory
+- `root_directories:` with one or more paths (for example `~/code`): only run when the current working directory is a direct child of one of those roots; `~` expands to the user's home directory
+- when missing, `pupdate run` and `pupdate config` create the config directory and write defaults (`root_directories: []`)
 
 ### `pupdate init`
 
@@ -132,13 +133,14 @@ Flags:
 
 ### `pupdate config`
 
-Prints the resolved user config path and active config values.
+Prints the resolved user config path and active config values. If the config file
+is missing, it creates `config.yaml` with defaults first.
 
 Output includes:
 
 - whether the config file currently exists
-- the configured `root_directory` value from the file
-- the resolved `root_directory` value after `~` expansion and path normalization
+- the configured `root_directories` values from the file
+- the resolved `root_directories` values after `~` expansion and path normalization
 
 ## How It Works
 
@@ -160,7 +162,7 @@ can react to submodule drift even when `.gitmodules` itself has not changed.
 Manual runs use stable, concise stderr prefixes:
 
 - `pupdate: skip repo ($HOME)`
-- `pupdate: skip repo (outside configured root_directory)`
+- `pupdate: skip repo (outside configured root_directories)`
 - `pupdate: skip repo (.pupignore)`
 - `pupdate: installs disabled via PUPDATE_SKIP_INSTALL`
 - `pupdate: skip <target> (<reason>)`
@@ -181,6 +183,6 @@ from shell history or logs.
 - Lifecycle scripts are disabled by default where supported.
 - `--allow-scripts` is required to opt into lifecycle scripts.
 - `.pupignore` short-circuits the full run for a repository before detection and state checks.
-- `root_directory` can restrict runs to a specific directory tree.
+- `root_directories` can restrict runs to top-level project directories under specific roots.
 - Hook-driven runs remain non-blocking and avoid launching from `$HOME`.
 - Git submodule status failures are surfaced as stderr errors without crashing the command.

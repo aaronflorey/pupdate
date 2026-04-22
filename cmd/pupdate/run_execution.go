@@ -40,12 +40,12 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 		return nil
 	}
 
-	restricted, err := isOutsideConfiguredRootDirectory()
+	restricted, err := isOutsideConfiguredRootDirectories()
 	if err != nil {
 		return err
 	}
 	if restricted {
-		printStatus(cmd, options.Quiet, "pupdate: skip repo (outside configured root_directory)")
+		printStatus(cmd, options.Quiet, "pupdate: skip repo (outside configured root_directories)")
 		return nil
 	}
 
@@ -72,12 +72,12 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 	return saveSuccessfulRunOutcomes(execution.Store, execution.CurrentState, outcomes)
 }
 
-func isOutsideConfiguredRootDirectory() (bool, error) {
+func isOutsideConfiguredRootDirectories() (bool, error) {
 	config, err := loadUserConfig()
 	if err != nil {
 		return false, err
 	}
-	if config.RootDirectory == "" {
+	if len(config.RootDirectories) == 0 {
 		return false, nil
 	}
 
@@ -86,7 +86,13 @@ func isOutsideConfiguredRootDirectory() (bool, error) {
 		return false, fmt.Errorf("failed to resolve working directory: %w", err)
 	}
 
-	return !isWithinDirectory(workingDir, config.RootDirectory), nil
+	for _, rootDirectory := range config.RootDirectories {
+		if isTopLevelDirectoryWithinRoot(workingDir, rootDirectory) {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 func prepareRunExecution(cmd *cobra.Command, options runOptions) (runExecution, error) {
