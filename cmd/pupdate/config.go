@@ -159,8 +159,8 @@ func expandConfiguredDirectory(path string) (string, error) {
 }
 
 func isTopLevelDirectoryWithinRoot(path string, root string) bool {
-	resolvedPath := resolveDirectory(path)
-	resolvedRoot := resolveDirectory(root)
+	resolvedPath := normalizeDirectoryForComparison(path)
+	resolvedRoot := normalizeDirectoryForComparison(root)
 	if resolvedRoot == "" || resolvedPath == "" {
 		return false
 	}
@@ -175,4 +175,13 @@ func isTopLevelDirectoryWithinRoot(path string, root string) bool {
 	}
 
 	return !strings.Contains(rel, string(filepath.Separator))
+}
+
+func normalizeDirectoryForComparison(path string) string {
+	resolved := resolveDirectory(path)
+	if resolved == "" {
+		return ""
+	}
+
+	return strings.ToLower(resolved)
 }

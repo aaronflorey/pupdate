@@ -474,6 +474,57 @@ func TestRunAllowsTopLevelProjectInsideConfiguredRootDirectoriesWithHomeExpansio
 	}
 }
 
+func TestRunAllowsConfiguredRootDirectoriesCaseInsensitiveMatch(t *testing.T) {
+	homeDir := t.TempDir()
+	projectDir := filepath.Join(homeDir, "src", "project")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	writeFixtureFiles(t, projectDir, "package-lock.json")
+	writeFixtureFiles(t, filepath.Join(homeDir, ".config"), filepath.Join("pupdate", "config.yaml"))
+	configPath := filepath.Join(homeDir, ".config", "pupdate", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/SRC\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(homeDir, ".config"))
+	withChdir(t, projectDir)
+
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "true")
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--quiet"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	if stdout.Len() != 0 {
+		t.Fatalf("expected quiet run to avoid stdout, got %q", stdout.String())
+	}
+	if strings.Contains(stderr.String(), "outside configured root_directories") {
+		t.Fatalf("expected mixed-case configured root to allow project, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts") {
+		t.Fatalf("expected install to run inside mixed-case configured root, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: done npm") {
+		t.Fatalf("expected install completion inside mixed-case configured root, got %q", stderr.String())
+	}
+}
+
 func TestRunAllowsTopLevelProjectInsideConfiguredRootDirectoriesWhenSetToHomeShortcut(t *testing.T) {
 	homeDir := t.TempDir()
 	projectDir := filepath.Join(homeDir, "project")
