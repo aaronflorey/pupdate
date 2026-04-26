@@ -12,10 +12,10 @@ and skips unnecessary installs when dependency files have not changed.
 It is built for shell-hook usage on `cd`, so the common path stays low-latency,
 safe by default, and easy to follow from concise stderr status output.
 
-Detection is backed by `github.com/git-pkgs/manifests`, and install command
-construction is backed by `github.com/git-pkgs/managers`, while `pupdate`
-preserves its existing traversal limits, local state flow, and safe default
-behavior.
+Detection is backed by `github.com/git-pkgs/manifests` plus small local
+fallbacks for unsupported ecosystems, and install command construction is backed
+by `github.com/git-pkgs/managers` with the same approach. `pupdate` preserves
+its existing traversal limits, local state flow, and safe default behavior.
 
 ## Install
 
@@ -93,6 +93,7 @@ status when an update actually executes.
 | Python | `uv.lock` | `uv` | `uv sync --frozen` |
 | Python | `poetry.lock` | `poetry` | `poetry install --no-interaction --sync` |
 | Python | `requirements.txt` | `pip` | `pip install -r requirements.txt --disable-pip-version-check --no-input` |
+| Kasetto | `kasetto.lock`, `kasetto.yaml`, `kasetto.yml` | `kst` | `kst sync` |
 | Go | `go.mod` | `go` | `go mod download` |
 | Rust | `cargo.lock` | `cargo` | `cargo fetch --locked` |
 | Git submodules | `.gitmodules` | `git` | `git submodule update --init --recursive` |

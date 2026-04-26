@@ -98,6 +98,14 @@ func selectManagerPlan(result detection.DetectionResult, allowScripts bool) (man
 		default:
 			return managerPlan{}, false, fmt.Sprintf("unsupported Python manager %q; skipping install", result.Managers[0])
 		}
+	case detection.EcosystemKasetto:
+		if len(result.Managers) != 1 {
+			return managerPlan{}, false, "multiple Kasetto signals detected; skipping install"
+		}
+		if result.Managers[0] != "kst" {
+			return managerPlan{}, false, fmt.Sprintf("unsupported Kasetto manager %q; skipping install", result.Managers[0])
+		}
+		return managerPlan{Manager: "kst", Args: []string{"sync"}}, true, ""
 	case detection.EcosystemGo:
 		return buildInstallPlan("gomod", managers.CommandInput{})
 	case detection.EcosystemRust:

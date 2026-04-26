@@ -139,9 +139,30 @@ func TestDetectPythonGoRustSignals(t *testing.T) {
 	}
 }
 
+func TestDetectKasettoSignals(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, "kasetto.yaml", "KASETTO.LOCK", "kasetto.yml.bak")
+
+	results, err := Detect(dir)
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+
+	kasetto := assertContainsEcosystem(t, results, EcosystemKasetto)
+	if !slices.Equal(kasetto.MatchedFiles, []string{"kasetto.lock", "kasetto.yaml"}) {
+		t.Fatalf("unexpected kasetto matched files: %#v", kasetto.MatchedFiles)
+	}
+	if !slices.Equal(kasetto.Managers, []string{"kst"}) {
+		t.Fatalf("unexpected kasetto managers: %#v", kasetto.Managers)
+	}
+	if kasetto.StateKey() != "kasetto" {
+		t.Fatalf("unexpected kasetto state key: %q", kasetto.StateKey())
+	}
+}
+
 func TestDetectMultiEcosystemDeterministic(t *testing.T) {
 	dir := t.TempDir()
-	writeFiles(t, dir, "composer.lock", "bun.lock", "go.mod", "cargo.lock", "requirements.txt")
+	writeFiles(t, dir, "composer.lock", "bun.lock", "go.mod", "cargo.lock", "requirements.txt", "kasetto.lock")
 
 	results, err := Detect(dir)
 	if err != nil {
@@ -154,6 +175,7 @@ func TestDetectMultiEcosystemDeterministic(t *testing.T) {
 		EcosystemGo,
 		EcosystemRust,
 		EcosystemPython,
+		EcosystemKasetto,
 	}
 	if len(results) != len(expectedOrder) {
 		t.Fatalf("expected %d ecosystems, got %d: %#v", len(expectedOrder), len(results), results)
@@ -170,6 +192,7 @@ func TestDetectMultiEcosystemDeterministic(t *testing.T) {
 	assertHasFile(t, results[2].MatchedFiles, "go.mod")
 	assertHasFile(t, results[3].MatchedFiles, "cargo.lock")
 	assertHasFile(t, results[4].MatchedFiles, "requirements.txt")
+	assertHasFile(t, results[5].MatchedFiles, "kasetto.lock")
 }
 
 func TestDetectCaseInsensitiveCanonicalSignals(t *testing.T) {
