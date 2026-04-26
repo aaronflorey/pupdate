@@ -130,36 +130,40 @@ func detectDirectory(dirPath string, relativeDir string) ([]DetectionResult, err
 	}
 
 	filesByEcosystem := map[Ecosystem][]string{
-		EcosystemNode:   {},
-		EcosystemPHP:    {},
-		EcosystemGo:     {},
-		EcosystemRust:   {},
-		EcosystemPython: {},
-		EcosystemGit:    {},
+		EcosystemNode:    {},
+		EcosystemPHP:     {},
+		EcosystemGo:      {},
+		EcosystemRust:    {},
+		EcosystemPython:  {},
+		EcosystemKasetto: {},
+		EcosystemGit:     {},
 	}
 	managersByEcosystem := map[Ecosystem][]string{
-		EcosystemNode:   {},
-		EcosystemPHP:    {},
-		EcosystemGo:     {},
-		EcosystemRust:   {},
-		EcosystemPython: {},
-		EcosystemGit:    {},
+		EcosystemNode:    {},
+		EcosystemPHP:     {},
+		EcosystemGo:      {},
+		EcosystemRust:    {},
+		EcosystemPython:  {},
+		EcosystemKasetto: {},
+		EcosystemGit:     {},
 	}
 	fileSeen := map[Ecosystem]map[string]bool{
-		EcosystemNode:   {},
-		EcosystemPHP:    {},
-		EcosystemGo:     {},
-		EcosystemRust:   {},
-		EcosystemPython: {},
-		EcosystemGit:    {},
+		EcosystemNode:    {},
+		EcosystemPHP:     {},
+		EcosystemGo:      {},
+		EcosystemRust:    {},
+		EcosystemPython:  {},
+		EcosystemKasetto: {},
+		EcosystemGit:     {},
 	}
 	managerSeen := map[Ecosystem]map[string]bool{
-		EcosystemNode:   {},
-		EcosystemPHP:    {},
-		EcosystemGo:     {},
-		EcosystemRust:   {},
-		EcosystemPython: {},
-		EcosystemGit:    {},
+		EcosystemNode:    {},
+		EcosystemPHP:     {},
+		EcosystemGo:      {},
+		EcosystemRust:    {},
+		EcosystemPython:  {},
+		EcosystemKasetto: {},
+		EcosystemGit:     {},
 	}
 
 	for _, entry := range entries {

@@ -1042,6 +1042,12 @@ func TestSelectManagerPlanExpandedManagersUseSafeFlags(t *testing.T) {
 			args:    []string{"install", "-r", "requirements.txt", "--disable-pip-version-check", "--no-input"},
 		},
 		{
+			name:    "kasetto",
+			result:  detection.DetectionResult{Ecosystem: detection.EcosystemKasetto, Managers: []string{"kst"}},
+			manager: "kst",
+			args:    []string{"sync"},
+		},
+		{
 			name:    "go",
 			result:  detection.DetectionResult{Ecosystem: detection.EcosystemGo, Managers: []string{"go"}},
 			manager: "go",
@@ -1091,6 +1097,11 @@ func TestSelectManagerPlanAllowScriptsDropsScriptBlockingFlags(t *testing.T) {
 			name:   "npm",
 			result: detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"npm"}},
 			args:   []string{"ci"},
+		},
+		{
+			name:   "kasetto",
+			result: detection.DetectionResult{Ecosystem: detection.EcosystemKasetto, Managers: []string{"kst"}},
+			args:   []string{"sync"},
 		},
 	}
 
@@ -1197,6 +1208,7 @@ func TestRunPrintsRunLineForExpandedManagers(t *testing.T) {
 	}{
 		{name: "node npm", file: "package-lock.json", ecosystem: "node", manager: "npm", args: "ci --ignore-scripts"},
 		{name: "python pip", file: "requirements.txt", ecosystem: "python", manager: "pip", args: "install -r requirements.txt --disable-pip-version-check --no-input"},
+		{name: "kasetto", file: "kasetto.lock", ecosystem: "kasetto", manager: "kst", args: "sync"},
 		{name: "go", file: "go.mod", ecosystem: "go", manager: "go", args: "mod download"},
 	}
 

@@ -3,12 +3,13 @@ package detection
 type Ecosystem string
 
 const (
-	EcosystemNode   Ecosystem = "node"
-	EcosystemPHP    Ecosystem = "php"
-	EcosystemGo     Ecosystem = "go"
-	EcosystemRust   Ecosystem = "rust"
-	EcosystemPython Ecosystem = "python"
-	EcosystemGit    Ecosystem = "git"
+	EcosystemNode    Ecosystem = "node"
+	EcosystemPHP     Ecosystem = "php"
+	EcosystemGo      Ecosystem = "go"
+	EcosystemRust    Ecosystem = "rust"
+	EcosystemPython  Ecosystem = "python"
+	EcosystemKasetto Ecosystem = "kasetto"
+	EcosystemGit     Ecosystem = "git"
 )
 
 type WarningCode string

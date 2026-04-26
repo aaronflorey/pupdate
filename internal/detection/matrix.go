@@ -18,6 +18,7 @@ var ecosystemOrder = []Ecosystem{
 	EcosystemGo,
 	EcosystemRust,
 	EcosystemPython,
+	EcosystemKasetto,
 	EcosystemGit,
 }
 
@@ -30,6 +31,9 @@ var supportedSignalNames = []string{
 	"uv.lock",
 	"poetry.lock",
 	"requirements.txt",
+	"kasetto.lock",
+	"kasetto.yaml",
+	"kasetto.yml",
 	"go.mod",
 	"Cargo.lock",
 	".gitmodules",
@@ -44,9 +48,30 @@ var signalManagerByName = map[string]string{
 	"uv.lock":           "uv",
 	"poetry.lock":       "poetry",
 	"requirements.txt":  "pip",
+	"kasetto.lock":      "kst",
+	"kasetto.yaml":      "kst",
+	"kasetto.yml":       "kst",
 	"go.mod":            "go",
 	"Cargo.lock":        "cargo",
 	".gitmodules":       "git",
+}
+
+var localSignalByName = map[string]supportedSignal{
+	"kasetto.lock": {
+		ecosystem: EcosystemKasetto,
+		manager:   "kst",
+		name:      "kasetto.lock",
+	},
+	"kasetto.yaml": {
+		ecosystem: EcosystemKasetto,
+		manager:   "kst",
+		name:      "kasetto.yaml",
+	},
+	"kasetto.yml": {
+		ecosystem: EcosystemKasetto,
+		manager:   "kst",
+		name:      "kasetto.yml",
+	},
 }
 
 var canonicalSignalByLowerName = buildCanonicalSignalNames()
@@ -63,6 +88,10 @@ func detectSupportedSignal(name string) (supportedSignal, bool) {
 	canonicalName, ok := canonicalSignalByLowerName[strings.ToLower(name)]
 	if !ok {
 		return supportedSignal{}, false
+	}
+
+	if signal, ok := localSignalByName[canonicalName]; ok {
+		return signal, true
 	}
 
 	ecosystemName, _, ok := manifests.Identify(canonicalName)
