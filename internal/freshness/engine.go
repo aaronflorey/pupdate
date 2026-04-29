@@ -43,27 +43,28 @@ const (
 )
 
 type EcosystemDecision struct {
-	Ecosystem string
-	StateKey  string
-	Decision  Decision
-	Reason    string
-	Lockfiles map[string]string
+	Ecosystem        string
+	StateKey         string
+	Decision         Decision
+	Reason           string
+	Lockfiles        map[string]string
+	LockfileMetadata map[string]state.LockfileMetadata
 }
 
 func Evaluate(dir string, detections []detection.DetectionResult, current state.FileState) ([]EcosystemDecision, error) {
 	decisions := make([]EcosystemDecision, 0, len(detections))
 
 	for _, result := range detections {
-		lockfiles, err := hashMatchedFiles(dir, result.MatchedFiles)
-		if err != nil {
-			return nil, err
-		}
-
 		ecosystem := string(result.Ecosystem)
 		stateKey := result.StateKey()
 		ecosystemState, hasState := current.Ecosystems[stateKey]
 		if !hasState && (result.Directory == "" || result.Directory == ".") {
 			ecosystemState, hasState = current.Ecosystems[ecosystem]
+		}
+
+		lockfiles, lockfileMetadata, err := hashMatchedFiles(dir, result.MatchedFiles, ecosystemState)
+		if err != nil {
+			return nil, err
 		}
 
 		if result.Ecosystem == detection.EcosystemPHP {
@@ -80,11 +81,12 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 			}
 		}
 		decision := EcosystemDecision{
-			Ecosystem: ecosystem,
-			StateKey:  stateKey,
-			Decision:  DecisionUpdate,
-			Reason:    "missing prior lockfile hash",
-			Lockfiles: lockfiles,
+			Ecosystem:        ecosystem,
+			StateKey:         stateKey,
+			Decision:         DecisionUpdate,
+			Reason:           "missing prior lockfile hash",
+			Lockfiles:        lockfiles,
+			LockfileMetadata: lockfileMetadata,
 		}
 		if hasState && len(ecosystemState.Lockfiles) > 0 {
 			if lockfilesEqual(ecosystemState.Lockfiles, lockfiles) {
@@ -166,7 +168,7 @@ func writeFingerprintEntry(hasher io.Writer, relPath string, fullPath string) er
 		return nil
 	}
 
-	contentHash, err := hashFile(fullPath)
+	contentHash, err := hashFileFn(fullPath)
 	if err != nil {
 		return fmt.Errorf("hash %q: %w", relPath, err)
 	}
@@ -236,19 +238,40 @@ func hasGitSubmoduleDrift(lines []string) bool {
 	return false
 }
 
-func hashMatchedFiles(dir string, matchedFiles []string) (map[string]string, error) {
+var hashFileFn = hashFile
+
+func hashMatchedFiles(dir string, matchedFiles []string, previous state.EcosystemState) (map[string]string, map[string]state.LockfileMetadata, error) {
 	lockfiles := make(map[string]string, len(matchedFiles))
+	metadata := make(map[string]state.LockfileMetadata, len(matchedFiles))
 	for _, matchedFile := range matchedFiles {
 		fullPath := filepath.Join(dir, matchedFile)
-		hash, err := hashFile(fullPath)
+		info, err := os.Stat(fullPath)
 		if err != nil {
-			return nil, fmt.Errorf("hash matched file %q: %w", matchedFile, err)
+			return nil, nil, fmt.Errorf("stat matched file %q: %w", matchedFile, err)
 		}
 
-		lockfiles[strings.ToLower(matchedFile)] = hash
+		key := strings.ToLower(matchedFile)
+		currentMetadata := state.LockfileMetadata{
+			Size:            info.Size(),
+			ModTimeUnixNano: info.ModTime().UTC().UnixNano(),
+			Mode:            info.Mode().String(),
+		}
+		metadata[key] = currentMetadata
+
+		if previousHash, ok := previous.Lockfiles[key]; ok && previous.LockfileMetadata[key] == currentMetadata {
+			lockfiles[key] = previousHash
+			continue
+		}
+
+		hash, err := hashFileFn(fullPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("hash matched file %q: %w", matchedFile, err)
+		}
+
+		lockfiles[key] = hash
 	}
 
-	return lockfiles, nil
+	return lockfiles, metadata, nil
 }
 
 func hashFile(path string) (string, error) {
