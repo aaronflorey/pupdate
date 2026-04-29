@@ -112,7 +112,7 @@ func TestDetectPHP(t *testing.T) {
 
 func TestDetectPythonGoRustSignals(t *testing.T) {
 	dir := t.TempDir()
-	writeFiles(t, dir, "requirements.txt", "uv.lock", "poetry.lock", "go.mod", "cargo.lock")
+	writeFiles(t, dir, "requirements.txt", "uv.lock", "poetry.lock", "go.mod", "Cargo.lock")
 
 	results, err := Detect(dir)
 	if err != nil {
@@ -134,7 +134,7 @@ func TestDetectPythonGoRustSignals(t *testing.T) {
 	}
 
 	rust := assertContainsEcosystem(t, results, EcosystemRust)
-	if !slices.Equal(rust.MatchedFiles, []string{"cargo.lock"}) {
+	if !slices.Equal(rust.MatchedFiles, []string{"Cargo.lock"}) {
 		t.Fatalf("unexpected rust matched files: %#v", rust.MatchedFiles)
 	}
 }
@@ -162,7 +162,7 @@ func TestDetectKasettoSignals(t *testing.T) {
 
 func TestDetectMultiEcosystemDeterministic(t *testing.T) {
 	dir := t.TempDir()
-	writeFiles(t, dir, "composer.lock", "bun.lock", "go.mod", "cargo.lock", "requirements.txt", "kasetto.lock")
+	writeFiles(t, dir, "composer.lock", "bun.lock", "go.mod", "Cargo.lock", "requirements.txt", "kasetto.lock")
 
 	results, err := Detect(dir)
 	if err != nil {
@@ -190,7 +190,7 @@ func TestDetectMultiEcosystemDeterministic(t *testing.T) {
 	assertHasFile(t, results[0].MatchedFiles, "bun.lock")
 	assertHasFile(t, results[1].MatchedFiles, "composer.lock")
 	assertHasFile(t, results[2].MatchedFiles, "go.mod")
-	assertHasFile(t, results[3].MatchedFiles, "cargo.lock")
+	assertHasFile(t, results[3].MatchedFiles, "Cargo.lock")
 	assertHasFile(t, results[4].MatchedFiles, "requirements.txt")
 	assertHasFile(t, results[5].MatchedFiles, "kasetto.lock")
 }
@@ -217,7 +217,7 @@ func TestDetectCaseInsensitiveCanonicalSignals(t *testing.T) {
 	assertHasFile(t, goResult.MatchedFiles, "go.mod")
 
 	rust := assertContainsEcosystem(t, results, EcosystemRust)
-	assertHasFile(t, rust.MatchedFiles, "cargo.lock")
+	assertHasFile(t, rust.MatchedFiles, "Cargo.lock")
 
 	python := assertContainsEcosystem(t, results, EcosystemPython)
 	assertHasFile(t, python.MatchedFiles, "requirements.txt")

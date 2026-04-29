@@ -20,6 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: Backfill Verification for Ecosystem Expansion (Phase 2)** - Add missing verification artifacts for ecosystem expansion requirements.
 - [x] **Phase 7: Backfill Verification for Release and Milestone Closeout (Phase 3)** - Add missing verification artifacts for release automation and milestone closeout requirements.
 - [x] **Phase 8: Optional Audit Tech Debt Cleanup (INSERTED)** - Add regression tests and clean up low-value exports identified by the audit.
+- [ ] **Phase 9: Post-v1 Hardening and Hermeticity (INSERTED)** - Address targeted reliability, durability, and hot-path performance follow-ups identified after milestone closeout.
 
 ## Phase Details
 
@@ -55,6 +56,7 @@ Phases execute in numeric order: 1 → 1.1 → 1.2 → 2
 | 6. Backfill Verification for Ecosystem Expansion (Phase 2) | 1/1 | Complete | 2026-04-08 |
 | 7. Backfill Verification for Release and Milestone Closeout (Phase 3) | 1/1 | Complete | 2026-04-08 |
 | 8. Optional Audit Tech Debt Cleanup | 1/1 | Complete | 2026-04-08 |
+| 9. Post-v1 Hardening and Hermeticity | 0/6 | Planned | - |
 
 ### Phase 2: implement other package managers from IDEA.md
 
@@ -133,3 +135,19 @@ Plans:
 
 Plans:
 - [x] 08-01-PLAN.md — Remove low-value exported helper and record existing hook-visibility regression coverage.
+
+### Phase 9: post-v1 hardening and hermeticity (inserted)
+
+**Goal:** Close the next set of low-level maintenance gaps by hardening detection, config, freshness, hashing, and state persistence behavior without reopening milestone-scale scope.
+**Requirements**: None (maintenance hardening)
+**Depends on:** Phase 8
+**Gap Closure:** Captures post-v1 reliability and performance follow-ups for Rust lockfile handling, command-test hermeticity, git submodule freshness, lockfile hashing cost, state durability, and missing-config defaults.
+**Plans:** 6 plans
+
+Plans:
+- [x] 09-01-PLAN.md — Fix `Cargo.lock` case handling.
+- [ ] 09-02-PLAN.md — Make `cmd/pupdate` tests hermetic and remove ambient config coupling.
+- [ ] 09-03-PLAN.md — Add timeout/injection for git submodule freshness checks.
+- [ ] 09-04-PLAN.md — Reduce hot-path lockfile hashing cost.
+- [ ] 09-05-PLAN.md — Harden state-file persistence with parent-directory fsync.
+- [ ] 09-06-PLAN.md — Remove auto-create-on-run config behavior and treat missing config as defaults.

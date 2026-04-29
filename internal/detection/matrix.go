@@ -107,7 +107,7 @@ func detectSupportedSignal(name string) (supportedSignal, bool) {
 	return supportedSignal{
 		ecosystem: ecosystem,
 		manager:   signalManagerByName[canonicalName],
-		name:      strings.ToLower(canonicalName),
+		name:      canonicalName,
 	}, true
 }
 

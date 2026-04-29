@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: complete
-stopped_at: Completed phase 08 optional audit tech-debt cleanup
-last_updated: "2026-04-08T00:00:00.000Z"
-last_activity: 2026-04-08
+status: executing
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-04-29T23:39:39.450Z"
+last_activity: 2026-04-29
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 8
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
+  total_plans: 19
+  completed_plans: 14
+  percent: 74
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Keep project dependencies up to date automatically on directory entry without slowing down shell navigation.
-**Current focus:** Milestone v1.0 complete — project is in post-closeout maintenance mode
+**Current focus:** Phase 09 — post-v1 hardening and hermeticity
 
 ## Current Position
 
-Phase: 08
-Plan: 1 of 1 in current phase
-Status: Complete — milestone closed and follow-up audit cleanup recorded
-Last activity: 2026-04-08
+Phase: 09 (post-v1 hardening and hermeticity) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-04-29
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 74%
 
 ## Performance Metrics
 
@@ -91,6 +91,7 @@ Recent decisions affecting current work:
 - [Phase 06]: Backfill missing verification artifacts from existing summaries and tests instead of reopening Phase 2 implementation scope.
 - [Phase 07]: Backfill missing verification artifacts from existing release configs and milestone summaries instead of reopening Phase 3 implementation scope.
 - [Phase 08]: Remove low-value exported helpers only when they are truly package-local and existing regression coverage already closes the behavioral audit risk.
+- [Phase 09]: Track each requested post-v1 hardening item as its own plan so execution can stay narrow and verification can remain package-scoped.
 
 ### Roadmap Evolution
 
@@ -102,10 +103,16 @@ Recent decisions affecting current work:
 - Phase 6 completed: Phase 2 verification backfill artifacts added.
 - Phase 7 completed: Phase 3 verification backfill artifacts added.
 - Phase 8 completed: optional audit tech-debt cleanup applied.
+- Phase 9 added: post-v1 hardening and hermeticity maintenance follow-up planned.
 
 ### Pending Todos
 
-- None.
+- Plan 09-01: fix `Cargo.lock` case handling.
+- Plan 09-02: make `cmd/pupdate` tests hermetic and stop ambient config coupling.
+- Plan 09-03: add timeout/injection for git submodule freshness checks.
+- Plan 09-04: reduce hot-path lockfile hashing cost.
+- Plan 09-05: harden state-file persistence with parent-dir fsync.
+- Plan 09-06: remove auto-create-on-run behavior for user config and treat missing config as defaults.
 
 ### Blockers/Concerns
 
@@ -113,6 +120,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-08T00:00:00.000Z
-Stopped at: Completed phase 08 optional audit tech-debt cleanup
+Last session: 2026-04-29T23:39:39.178Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
