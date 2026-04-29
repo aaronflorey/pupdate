@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,8 +20,10 @@ func newConfigCmd() *cobra.Command {
 				return err
 			}
 
-			if err := ensureUserConfigExists(path); err != nil {
-				return err
+			_, statErr := os.Stat(path)
+			exists := statErr == nil
+			if statErr != nil && !os.IsNotExist(statErr) {
+				return fmt.Errorf("failed to stat %s: %w", path, statErr)
 			}
 
 			rawConfig, err := readUserConfig(path)
@@ -35,7 +38,7 @@ func newConfigCmd() *cobra.Command {
 
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "path: %s\nexists: %t\nroot_directories: %s\nroot_directories_resolved: %s\n",
 				path,
-				true,
+				exists,
 				displayConfigValues(rawConfig.RootDirectories),
 				displayConfigValues(resolvedConfig.RootDirectories),
 			)
