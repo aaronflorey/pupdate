@@ -96,7 +96,7 @@ func TestRunManualModeUsesHumanReadableStatusWithoutStdout(t *testing.T) {
 	}
 }
 
-func TestRunCreatesDefaultUserConfigWhenMissing(t *testing.T) {
+func TestRunDoesNotCreateUserConfigWhenMissing(t *testing.T) {
 	disableInstall(t)
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "bun.lock")
@@ -118,12 +118,8 @@ func TestRunCreatesDefaultUserConfigWhenMissing(t *testing.T) {
 		t.Fatalf("run failed: %v", err)
 	}
 
-	rawConfig, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("expected run command to create default user config: %v", err)
-	}
-	if string(rawConfig) != defaultUserConfigContent {
-		t.Fatalf("expected default config content %q, got %q", defaultUserConfigContent, string(rawConfig))
+	if _, err := os.Stat(configPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected run command to leave config missing, err=%v", err)
 	}
 }
 

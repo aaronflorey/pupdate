@@ -76,8 +76,8 @@ func TestConfigShowsUnsetValuesWhenConfigIsMissing(t *testing.T) {
 	if !strings.Contains(out, "path: "+expectedPath) {
 		t.Fatalf("expected missing config path in output, got %q", out)
 	}
-	if !strings.Contains(out, "exists: true") {
-		t.Fatalf("expected exists=true in output, got %q", out)
+	if !strings.Contains(out, "exists: false") {
+		t.Fatalf("expected exists=false in output, got %q", out)
 	}
 	if !strings.Contains(out, "root_directories: (not set)") {
 		t.Fatalf("expected unset root_directories in output, got %q", out)
@@ -86,12 +86,8 @@ func TestConfigShowsUnsetValuesWhenConfigIsMissing(t *testing.T) {
 		t.Fatalf("expected unset resolved root_directories in output, got %q", out)
 	}
 
-	rawConfig, err := os.ReadFile(expectedPath)
-	if err != nil {
-		t.Fatalf("expected command to create default config file: %v", err)
-	}
-	if string(rawConfig) != defaultUserConfigContent {
-		t.Fatalf("expected default config content %q, got %q", defaultUserConfigContent, string(rawConfig))
+	if _, err := os.Stat(expectedPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected config command to leave config missing, err=%v", err)
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
