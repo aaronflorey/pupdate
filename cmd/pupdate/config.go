@@ -12,7 +12,6 @@ import (
 )
 
 const configFileName = "config.yaml"
-const defaultUserConfigContent = "root_directories: []\n"
 
 type userConfig struct {
 	RootDirectories []string `yaml:"root_directories"`
@@ -70,27 +69,6 @@ func readUserConfig(path string) (userConfig, error) {
 	return cfg, nil
 }
 
-func ensureUserConfigExists(path string) error {
-	configDir := filepath.Dir(path)
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create config directory %s: %w", configDir, err)
-	}
-
-	_, err := os.Stat(path)
-	if err == nil {
-		return nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("failed to stat %s: %w", path, err)
-	}
-
-	if err := os.WriteFile(path, []byte(defaultUserConfigContent), 0o644); err != nil {
-		return fmt.Errorf("failed to create %s: %w", path, err)
-	}
-
-	return nil
-}
-
 func resolveUserConfig(cfg userConfig) (userConfig, error) {
 	if len(cfg.RootDirectories) > 0 {
 		resolvedDirectories := make([]string, 0, len(cfg.RootDirectories))
@@ -113,10 +91,6 @@ func resolveUserConfig(cfg userConfig) (userConfig, error) {
 func loadUserConfig() (userConfig, error) {
 	path, err := resolveUserConfigPath()
 	if err != nil {
-		return userConfig{}, err
-	}
-
-	if err := ensureUserConfigExists(path); err != nil {
 		return userConfig{}, err
 	}
 
