@@ -8,9 +8,10 @@ import (
 )
 
 type ecosystemOutcome struct {
-	StateKey  string
-	Succeeded bool
-	Lockfiles map[string]string
+	StateKey         string
+	Succeeded        bool
+	Lockfiles        map[string]string
+	LockfileMetadata map[string]state.LockfileMetadata
 }
 
 func applySuccessfulOutcomes(now time.Time, current state.FileState, outcomes []ecosystemOutcome) state.FileState {
@@ -31,12 +32,17 @@ func applySuccessfulOutcomes(now time.Time, current state.FileState, outcomes []
 		}
 		existing := next.Ecosystems[outcome.StateKey]
 		lockfiles := existing.Lockfiles
+		lockfileMetadata := existing.LockfileMetadata
 		if len(outcome.Lockfiles) > 0 {
 			lockfiles = cloneLockfiles(outcome.Lockfiles)
 		}
+		if len(outcome.LockfileMetadata) > 0 {
+			lockfileMetadata = cloneLockfileMetadata(outcome.LockfileMetadata)
+		}
 		next.Ecosystems[outcome.StateKey] = state.EcosystemState{
-			LastSuccessAt: state.FormatRFC3339UTC(now),
-			Lockfiles:     lockfiles,
+			LastSuccessAt:    state.FormatRFC3339UTC(now),
+			Lockfiles:        lockfiles,
+			LockfileMetadata: lockfileMetadata,
 		}
 	}
 
@@ -68,6 +74,17 @@ func cloneLockfiles(lockfiles map[string]string) map[string]string {
 	}
 	cloned := make(map[string]string, len(lockfiles))
 	for key, value := range lockfiles {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func cloneLockfileMetadata(metadata map[string]state.LockfileMetadata) map[string]state.LockfileMetadata {
+	if len(metadata) == 0 {
+		return map[string]state.LockfileMetadata{}
+	}
+	cloned := make(map[string]state.LockfileMetadata, len(metadata))
+	for key, value := range metadata {
 		cloned[key] = value
 	}
 	return cloned

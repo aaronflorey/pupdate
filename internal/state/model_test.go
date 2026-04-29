@@ -80,6 +80,24 @@ func TestDecodeIgnoresUnknownFields(t *testing.T) {
 	}
 }
 
+func TestDecodeInitializesLockfileMetadata(t *testing.T) {
+	raw := []byte(`{"version":1,"ecosystems":{"node":{"last_success_at":"2026-03-27T10:00:00Z","lockfiles":{"bun.lock":"abc"}}}}`)
+
+	got, warnings, err := Decode(raw)
+	if err != nil {
+		t.Fatalf("Decode returned error: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("expected no warnings, got %v", warnings)
+	}
+	if got.Ecosystems["node"].LockfileMetadata == nil {
+		t.Fatal("expected lockfile metadata map to be initialized")
+	}
+	if len(got.Ecosystems["node"].LockfileMetadata) != 0 {
+		t.Fatalf("expected empty lockfile metadata map, got %#v", got.Ecosystems["node"].LockfileMetadata)
+	}
+}
+
 func TestRFC3339UTCHelpers(t *testing.T) {
 	fixture := time.Date(2026, 3, 27, 10, 0, 0, 0, time.UTC)
 

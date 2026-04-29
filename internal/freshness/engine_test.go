@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,10 @@ func TestEvaluateChangedLockfileRuns(t *testing.T) {
 func TestEvaluateEqualHashesSkips(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "composer.lock", "same")
+	info, err := os.Stat(filepath.Join(dir, "composer.lock"))
+	if err != nil {
+		t.Fatalf("stat composer.lock: %v", err)
+	}
 	currentHash := hashText("same")
 
 	equalState := state.Empty()
@@ -90,6 +95,13 @@ func TestEvaluateEqualHashesSkips(t *testing.T) {
 		LastSuccessAt: "2026-03-01T14:00:00Z",
 		Lockfiles: map[string]string{
 			"composer.lock": currentHash,
+		},
+		LockfileMetadata: map[string]state.LockfileMetadata{
+			"composer.lock": {
+				Size:            info.Size(),
+				ModTimeUnixNano: info.ModTime().UTC().UnixNano(),
+				Mode:            info.Mode().String(),
+			},
 		},
 	}
 
@@ -111,6 +123,127 @@ func TestEvaluateEqualHashesSkips(t *testing.T) {
 	}
 	if equalResults[0].Reason != "dependency lockfiles unchanged since last successful run" {
 		t.Fatalf("expected unchanged-lockfiles reason, got %q", equalResults[0].Reason)
+	}
+}
+
+func TestEvaluateUnchangedMetadataReusesStoredHash(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "bun.lock", "same")
+	info, err := os.Stat(filepath.Join(dir, "bun.lock"))
+	if err != nil {
+		t.Fatalf("stat bun.lock: %v", err)
+	}
+
+	originalHashFile := hashFileFn
+	hashFileFn = func(string) (string, error) {
+		return "", errors.New("hash should not be called")
+	}
+	t.Cleanup(func() {
+		hashFileFn = originalHashFile
+	})
+
+	current := state.Empty()
+	current.Ecosystems["node"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"bun.lock": hashText("same"),
+		},
+		LockfileMetadata: map[string]state.LockfileMetadata{
+			"bun.lock": {
+				Size:            info.Size(),
+				ModTimeUnixNano: info.ModTime().UTC().UnixNano(),
+				Mode:            info.Mode().String(),
+			},
+		},
+	}
+
+	results, err := Evaluate(dir, []detection.DetectionResult{{
+		Ecosystem:    detection.EcosystemNode,
+		MatchedFiles: []string{"bun.lock"},
+	}}, current)
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+	if results[0].Decision != DecisionSkip {
+		t.Fatalf("expected DecisionSkip, got %q", results[0].Decision)
+	}
+}
+
+func TestEvaluateChangedMetadataRehashesLockfile(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "bun.lock", "new")
+
+	originalHashFile := hashFileFn
+	called := 0
+	hashFileFn = func(path string) (string, error) {
+		called++
+		return originalHashFile(path)
+	}
+	t.Cleanup(func() {
+		hashFileFn = originalHashFile
+	})
+
+	current := state.Empty()
+	current.Ecosystems["node"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"bun.lock": hashText("old"),
+		},
+		LockfileMetadata: map[string]state.LockfileMetadata{
+			"bun.lock": {Size: 3, ModTimeUnixNano: 1, Mode: "-rw-r--r--"},
+		},
+	}
+
+	results, err := Evaluate(dir, []detection.DetectionResult{{
+		Ecosystem:    detection.EcosystemNode,
+		MatchedFiles: []string{"bun.lock"},
+	}}, current)
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("expected lockfile rehash when metadata changes, got %d calls", called)
+	}
+	if results[0].Decision != DecisionUpdate {
+		t.Fatalf("expected DecisionUpdate, got %q", results[0].Decision)
+	}
+}
+
+func TestEvaluateMissingLockfileReturnsError(t *testing.T) {
+	_, err := Evaluate(t.TempDir(), []detection.DetectionResult{{
+		Ecosystem:    detection.EcosystemNode,
+		MatchedFiles: []string{"bun.lock"},
+	}}, state.Empty())
+	if err == nil {
+		t.Fatal("expected missing lockfile error")
+	}
+	if !strings.Contains(err.Error(), `stat matched file "bun.lock":`) {
+		t.Fatalf("unexpected missing lockfile error: %v", err)
+	}
+}
+
+func TestEvaluateRenamedLockfileTriggersUpdate(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "frontend/package-lock.json", "same")
+
+	current := state.Empty()
+	current.Ecosystems["node@frontend"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"package-lock.json": hashText("same"),
+		},
+	}
+
+	results, err := Evaluate(dir, []detection.DetectionResult{{
+		Ecosystem:    detection.EcosystemNode,
+		Directory:    "frontend",
+		MatchedFiles: []string{"frontend/package-lock.json"},
+	}}, current)
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+	if results[0].Decision != DecisionUpdate {
+		t.Fatalf("expected DecisionUpdate for renamed lockfile path, got %q", results[0].Decision)
 	}
 }
 

@@ -193,9 +193,10 @@ func executeRunResult(
 	}
 
 	return ecosystemOutcome{
-		StateKey:  result.StateKey(),
-		Succeeded: err == nil,
-		Lockfiles: decision.Lockfiles,
+		StateKey:         result.StateKey(),
+		Succeeded:        err == nil,
+		Lockfiles:        decision.Lockfiles,
+		LockfileMetadata: decision.LockfileMetadata,
 	}, true
 }
 
