@@ -1,6 +1,7 @@
 package state
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -66,6 +67,55 @@ func TestSaveCreatesPupdateLazily(t *testing.T) {
 
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf(".pupdate should exist after Save(), stat error = %v", err)
+	}
+}
+
+func TestSaveSyncsParentDirectoryAfterRename(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	original := syncParentDirFn
+	called := 0
+	var syncedPath string
+	syncParentDirFn = func(path string) error {
+		called++
+		syncedPath = path
+		return nil
+	}
+	t.Cleanup(func() {
+		syncParentDirFn = original
+	})
+
+	if err := store.Save(Empty()); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("expected parent directory sync once, got %d", called)
+	}
+	if syncedPath != filepath.Join(dir, FileName) {
+		t.Fatalf("expected synced path %q, got %q", filepath.Join(dir, FileName), syncedPath)
+	}
+}
+
+func TestSaveReturnsDirectorySyncFailure(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+	wantErr := errors.New("sync failed")
+
+	original := syncParentDirFn
+	syncParentDirFn = func(string) error {
+		return wantErr
+	}
+	t.Cleanup(func() {
+		syncParentDirFn = original
+	})
+
+	err := store.Save(Empty())
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Save() error = %v, want %v", err, wantErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, FileName)); statErr != nil {
+		t.Fatalf("expected renamed state file to still exist after sync failure, stat error = %v", statErr)
 	}
 }
 

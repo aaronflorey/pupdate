@@ -149,5 +149,5 @@ Plans:
 - [x] 09-02-PLAN.md — Make `cmd/pupdate` tests hermetic and remove ambient config coupling.
 - [x] 09-03-PLAN.md — Add timeout/injection for git submodule freshness checks.
 - [x] 09-04-PLAN.md — Reduce hot-path lockfile hashing cost.
-- [ ] 09-05-PLAN.md — Harden state-file persistence with parent-directory fsync.
+- [x] 09-05-PLAN.md — Harden state-file persistence with parent-directory fsync.
 - [ ] 09-06-PLAN.md — Remove auto-create-on-run config behavior and treat missing config as defaults.
