@@ -112,6 +112,35 @@ func TestEvaluateEqualHashesSkips(t *testing.T) {
 	}
 }
 
+func TestEvaluateRustCanonicalLockfileUsesLowercaseStateKey(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Cargo.lock", "same")
+
+	current := state.Empty()
+	current.Ecosystems["rust"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"cargo.lock": hashText("same"),
+		},
+	}
+
+	results, err := Evaluate(
+		dir,
+		[]detection.DetectionResult{{
+			Ecosystem:    detection.EcosystemRust,
+			MatchedFiles: []string{"Cargo.lock"},
+		}},
+		current,
+	)
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+
+	if results[0].Decision != DecisionSkip {
+		t.Fatalf("expected canonical Cargo.lock to compare against lowercase state key, got %q", results[0].Decision)
+	}
+}
+
 func TestEvaluatePHPVendorDriftRunsWhenLockfileUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "composer.lock", "same")
