@@ -13,22 +13,48 @@ func TestStateUpdatesOnlyOnSuccessOutcomes(t *testing.T) {
 	current := state.FileState{
 		Version: state.SchemaVersion,
 		Ecosystems: map[string]state.EcosystemState{
-			"node":   {LastSuccessAt: "2026-03-01T10:00:00Z", Lockfiles: map[string]string{"bun.lock": "old"}},
+			"node":   {LastSuccessAt: "2026-03-01T10:00:00Z", Lockfiles: map[string]string{"bun.lock": "old"}, LockfileMetadata: map[string]state.LockfileMetadata{"bun.lock": {Size: 3}}},
 			"python": {LastSuccessAt: "2026-03-01T11:00:00Z", Lockfiles: map[string]string{"requirements.txt": "old"}},
 		},
 	}
 
 	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{
-		{StateKey: "node", Succeeded: true, Lockfiles: map[string]string{"bun.lock": "new"}},
+		{StateKey: "node", Succeeded: true, Lockfiles: map[string]string{"bun.lock": "new"}, LockfileMetadata: map[string]state.LockfileMetadata{"bun.lock": {Size: 4}}},
 		{StateKey: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
 	})
 
 	expected := map[string]state.EcosystemState{
-		"node":   {LastSuccessAt: state.FormatRFC3339UTC(now), Lockfiles: map[string]string{"bun.lock": "new"}},
+		"node":   {LastSuccessAt: state.FormatRFC3339UTC(now), Lockfiles: map[string]string{"bun.lock": "new"}, LockfileMetadata: map[string]state.LockfileMetadata{"bun.lock": {Size: 4}}},
 		"python": {LastSuccessAt: "2026-03-01T11:00:00Z", Lockfiles: map[string]string{"requirements.txt": "old"}},
 	}
 	if !reflect.DeepEqual(updated.Ecosystems, expected) {
 		t.Fatalf("ecosystem state mismatch\ngot:  %#v\nwant: %#v", updated.Ecosystems, expected)
+	}
+}
+
+func TestStateUpdatePreservesExistingMetadataWhenOutcomeDoesNotReplaceIt(t *testing.T) {
+	now := time.Date(2026, 3, 2, 15, 0, 0, 0, time.UTC)
+	current := state.FileState{
+		Version: state.SchemaVersion,
+		Ecosystems: map[string]state.EcosystemState{
+			"node": {
+				LastSuccessAt: "2026-03-01T10:00:00Z",
+				Lockfiles:     map[string]string{"bun.lock": "old"},
+				LockfileMetadata: map[string]state.LockfileMetadata{
+					"bun.lock": {Size: 3, ModTimeUnixNano: 1, Mode: "-rw-r--r--"},
+				},
+			},
+		},
+	}
+
+	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{{
+		StateKey:  "node",
+		Succeeded: true,
+		Lockfiles: map[string]string{"bun.lock": "new"},
+	}})
+
+	if !reflect.DeepEqual(updated.Ecosystems["node"].LockfileMetadata, current.Ecosystems["node"].LockfileMetadata) {
+		t.Fatalf("expected metadata to be preserved when outcome does not provide replacement, got %#v", updated.Ecosystems["node"].LockfileMetadata)
 	}
 }
 
