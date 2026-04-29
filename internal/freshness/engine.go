@@ -2,8 +2,10 @@ package freshness
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,12 +13,26 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/state"
 )
 
 var gitSubmoduleStatusFn = defaultGitSubmoduleStatus
+
+var gitSubmoduleStatusTimeout = 2 * time.Second
+
+var runGitSubmoduleStatusCommand = func(ctx context.Context, dir string) ([]byte, []byte, error) {
+	cmd := exec.CommandContext(ctx, "git", "submodule", "status", "--recursive")
+	cmd.Dir = dir
+	output, err := cmd.Output()
+	var stderr []byte
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		stderr = exitErr.Stderr
+	}
+	return output, stderr, err
+}
 
 type Decision string
 
@@ -181,13 +197,13 @@ func isDirectory(path string) (bool, error) {
 }
 
 func defaultGitSubmoduleStatus(dir string) ([]string, error) {
-	cmd := exec.Command("git", "submodule", "status", "--recursive")
-	cmd.Dir = dir
-	output, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(context.Background(), gitSubmoduleStatusTimeout)
+	defer cancel()
+
+	output, stderr, err := runGitSubmoduleStatusCommand(ctx, dir)
 	if err != nil {
-		var stderr []byte
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			stderr = exitErr.Stderr
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, fmt.Errorf("timed out after %s", gitSubmoduleStatusTimeout)
 		}
 		trimmed := strings.TrimSpace(string(bytes.TrimSpace(stderr)))
 		if trimmed != "" {

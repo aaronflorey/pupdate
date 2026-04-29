@@ -1,6 +1,7 @@
 package freshness
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/state"
@@ -297,6 +299,49 @@ func TestEvaluateGitSubmoduleStatusFailureDoesNotFailEvaluation(t *testing.T) {
 	}
 	if !slices.Contains([]Decision{DecisionSkip, DecisionUpdate}, results[0].Decision) {
 		t.Fatalf("expected non-crashing decision, got %q", results[0].Decision)
+	}
+	if results[0].Reason != "git submodule status failed: status failed" {
+		t.Fatalf("unexpected failure reason: %q", results[0].Reason)
+	}
+}
+
+func TestDefaultGitSubmoduleStatusTimesOut(t *testing.T) {
+	originalRunner := runGitSubmoduleStatusCommand
+	originalTimeout := gitSubmoduleStatusTimeout
+	runGitSubmoduleStatusCommand = func(ctx context.Context, dir string) ([]byte, []byte, error) {
+		<-ctx.Done()
+		return nil, nil, ctx.Err()
+	}
+	gitSubmoduleStatusTimeout = 5 * time.Millisecond
+	t.Cleanup(func() {
+		runGitSubmoduleStatusCommand = originalRunner
+		gitSubmoduleStatusTimeout = originalTimeout
+	})
+
+	_, err := defaultGitSubmoduleStatus(t.TempDir())
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if err.Error() != "timed out after 5ms" {
+		t.Fatalf("unexpected timeout error: %v", err)
+	}
+}
+
+func TestDefaultGitSubmoduleStatusIncludesStderr(t *testing.T) {
+	originalRunner := runGitSubmoduleStatusCommand
+	runGitSubmoduleStatusCommand = func(context.Context, string) ([]byte, []byte, error) {
+		return nil, []byte("fatal: not a git repository\n"), errors.New("exit status 128")
+	}
+	t.Cleanup(func() {
+		runGitSubmoduleStatusCommand = originalRunner
+	})
+
+	_, err := defaultGitSubmoduleStatus(t.TempDir())
+	if err == nil {
+		t.Fatal("expected command error")
+	}
+	if err.Error() != "exit status 128: fatal: not a git repository" {
+		t.Fatalf("unexpected command error: %v", err)
 	}
 }
 
