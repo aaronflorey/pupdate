@@ -4,9 +4,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 const invalidStateWarning = "state file is invalid; treating as empty"
+
+var syncParentDirFn = syncParentDir
 
 type Store struct {
 	Dir string
@@ -61,5 +64,24 @@ func (s Store) Save(state FileState) error {
 		return err
 	}
 
-	return os.Rename(tmpPath, filepath.Join(s.Dir, FileName))
+	path := filepath.Join(s.Dir, FileName)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+
+	return syncParentDirFn(path)
+}
+
+func syncParentDir(path string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+
+	return dir.Sync()
 }
