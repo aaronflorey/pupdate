@@ -1251,7 +1251,7 @@ func TestSelectManagerPlanKasettoYMLUsesExplicitConfig(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected kasetto yml manager plan to be supported, reason=%q", reason)
 	}
-	if !slices.Equal(plan.Args, []string{"sync", "--project", "--config", "frontend/kasetto.yml"}) {
+	if !slices.Equal(plan.Args, []string{"sync", "--project", "--config", "kasetto.yml"}) {
 		t.Fatalf("unexpected kasetto yml args: %#v", plan.Args)
 	}
 }
