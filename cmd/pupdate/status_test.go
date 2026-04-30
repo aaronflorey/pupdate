@@ -16,8 +16,17 @@ import (
 
 func TestStatusShowsReadyTarget(t *testing.T) {
 	dir := t.TempDir()
+	homeDir := t.TempDir()
+	configHome := filepath.Join(homeDir, ".config")
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
 	writeFixtureFiles(t, dir, "bun.lock")
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	if err := os.WriteFile(configPath, []byte("quiet: true\nallow_scripts: true\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
 	withChdir(t, dir)
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
 
 	t.Cleanup(func() {
 		detectFn = detection.Detect
@@ -78,11 +87,20 @@ func TestStatusShowsReadyTarget(t *testing.T) {
 	if !strings.Contains(out, "install_status: ready") {
 		t.Fatalf("expected ready install status, got %q", out)
 	}
-	if !strings.Contains(out, "install_command: bun install --frozen-lockfile --ignore-scripts") {
-		t.Fatalf("expected bun install command, got %q", out)
-	}
 	if !strings.Contains(out, "manager_path: /fake/bin/bun") {
 		t.Fatalf("expected manager path, got %q", out)
+	}
+	if !strings.Contains(out, "quiet: true") {
+		t.Fatalf("expected quiet config in output, got %q", out)
+	}
+	if !strings.Contains(out, "allow_scripts: true") {
+		t.Fatalf("expected allow_scripts config in output, got %q", out)
+	}
+	if !strings.Contains(out, "effective_allow_scripts: true") {
+		t.Fatalf("expected effective allow_scripts in output, got %q", out)
+	}
+	if !strings.Contains(out, "install_command: bun install --frozen-lockfile") || strings.Contains(out, "install_command: bun install --frozen-lockfile --ignore-scripts") {
+		t.Fatalf("expected status command to reflect allow_scripts config, got %q", out)
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())

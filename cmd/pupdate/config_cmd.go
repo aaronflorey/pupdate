@@ -36,11 +36,13 @@ func newConfigCmd() *cobra.Command {
 				return err
 			}
 
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "path: %s\nexists: %t\nroot_directories: %s\nroot_directories_resolved: %s\n",
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "path: %s\nexists: %t\nroot_directories: %s\nroot_directories_resolved: %s\nquiet: %s\nallow_scripts: %s\n",
 				path,
 				exists,
 				displayConfigValues(rawConfig.RootDirectories),
 				displayConfigValues(resolvedConfig.RootDirectories),
+				displayOptionalBool(rawConfig.Quiet),
+				displayOptionalBool(rawConfig.AllowScripts),
 			)
 			return err
 		},
@@ -55,4 +57,16 @@ func displayConfigValues(values []string) string {
 	}
 
 	return strings.Join(values, ", ")
+}
+
+func displayOptionalBool(value *bool) string {
+	if value == nil {
+		return "(not set)"
+	}
+
+	if *value {
+		return "true"
+	}
+
+	return "false"
 }

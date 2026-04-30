@@ -1205,6 +1205,96 @@ func TestRunAllowScriptsUsesOptInFlags(t *testing.T) {
 	}
 }
 
+func TestRunUsesConfigDefaultsForQuietAndAllowScripts(t *testing.T) {
+	dir := t.TempDir()
+	homeDir := t.TempDir()
+	configHome := filepath.Join(homeDir, ".config")
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	writeFixtureFiles(t, dir, "package-lock.json")
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	if err := os.WriteFile(configPath, []byte("quiet: true\nallow_scripts: true\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	withChdir(t, dir)
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+
+	var ranArgs []string
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		ranArgs = append([]string(nil), args...)
+		return exec.CommandContext(ctx, "true")
+	}
+
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run command failed: %v", err)
+	}
+
+	if !slices.Equal(ranArgs, []string{"ci"}) {
+		t.Fatalf("expected config allow_scripts=true to omit --ignore-scripts, got %#v", ranArgs)
+	}
+	if strings.Contains(stderr.String(), "skip ") {
+		t.Fatalf("expected config quiet=true to suppress skip output, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: run npm ci") {
+		t.Fatalf("expected run line with config defaults, got %q", stderr.String())
+	}
+}
+
+func TestRunFlagsOverrideConfigDefaults(t *testing.T) {
+	dir := t.TempDir()
+	homeDir := t.TempDir()
+	configHome := filepath.Join(homeDir, ".config")
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	writeFixtureFiles(t, dir, "package-lock.json")
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	if err := os.WriteFile(configPath, []byte("quiet: true\nallow_scripts: true\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	withChdir(t, dir)
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+
+	var ranArgs []string
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		ranArgs = append([]string(nil), args...)
+		return exec.CommandContext(ctx, "true")
+	}
+
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--quiet=false", "--allow-scripts=false"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run command failed: %v", err)
+	}
+
+	if !slices.Equal(ranArgs, []string{"ci", "--ignore-scripts"}) {
+		t.Fatalf("expected explicit flags to restore safe defaults, got %#v", ranArgs)
+	}
+}
+
 func TestRunSkipsWhenExpandedManagerMissingFromPath(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "package-lock.json")
