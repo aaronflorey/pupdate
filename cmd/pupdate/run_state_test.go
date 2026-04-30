@@ -18,7 +18,7 @@ func TestStateUpdatesOnlyOnSuccessOutcomes(t *testing.T) {
 		},
 	}
 
-	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{
+	updated := applyRunOutcomes(now, current, []ecosystemOutcome{
 		{StateKey: "node", Succeeded: true, Lockfiles: map[string]string{"bun.lock": "new"}, LockfileMetadata: map[string]state.LockfileMetadata{"bun.lock": {Size: 4}}},
 		{StateKey: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
 	})
@@ -47,7 +47,7 @@ func TestStateUpdatePreservesExistingMetadataWhenOutcomeDoesNotReplaceIt(t *test
 		},
 	}
 
-	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{{
+	updated := applyRunOutcomes(now, current, []ecosystemOutcome{{
 		StateKey:  "node",
 		Succeeded: true,
 		Lockfiles: map[string]string{"bun.lock": "new"},
@@ -67,7 +67,7 @@ func TestStateUpdateDoesNotTouchFailedEcosystem(t *testing.T) {
 		},
 	}
 
-	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{
+	updated := applyRunOutcomes(now, current, []ecosystemOutcome{
 		{StateKey: "go", Succeeded: false, Lockfiles: map[string]string{"go.mod": "new"}},
 	})
 
@@ -87,12 +87,45 @@ func TestStateUpdateNoSuccessNoMutation(t *testing.T) {
 		Ecosystems: map[string]state.EcosystemState{},
 	}
 
-	updated := applySuccessfulOutcomes(now, current, []ecosystemOutcome{
+	updated := applyRunOutcomes(now, current, []ecosystemOutcome{
 		{StateKey: "node", Succeeded: false, Lockfiles: map[string]string{"bun.lock": "new"}},
 		{StateKey: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
 	})
 
 	if len(updated.Ecosystems) != 0 {
 		t.Fatalf("expected no mutations when no outcomes succeed, got %#v", updated.Ecosystems)
+	}
+}
+
+func TestStateMetadataRefreshPreservesLastSuccessTimestamp(t *testing.T) {
+	now := time.Date(2026, 3, 2, 16, 0, 0, 0, time.UTC)
+	current := state.FileState{
+		Version: state.SchemaVersion,
+		Ecosystems: map[string]state.EcosystemState{
+			"node": {
+				LastSuccessAt: "2026-03-01T10:00:00Z",
+				Lockfiles:     map[string]string{"bun.lock": "same"},
+				LockfileMetadata: map[string]state.LockfileMetadata{
+					"bun.lock": {Size: 3},
+				},
+			},
+		},
+	}
+
+	updated := applyRunOutcomes(now, current, []ecosystemOutcome{{
+		StateKey:        "node",
+		RefreshMetadata: true,
+		Lockfiles:       map[string]string{"bun.lock": "same"},
+		LockfileMetadata: map[string]state.LockfileMetadata{
+			"bun.lock": {Size: 3, FileID: "1:2", ChangeTimeUnixNano: 3},
+		},
+	}})
+
+	got := updated.Ecosystems["node"]
+	if got.LastSuccessAt != "2026-03-01T10:00:00Z" {
+		t.Fatalf("expected metadata refresh to preserve last success timestamp, got %q", got.LastSuccessAt)
+	}
+	if !reflect.DeepEqual(got.LockfileMetadata, map[string]state.LockfileMetadata{"bun.lock": {Size: 3, FileID: "1:2", ChangeTimeUnixNano: 3}}) {
+		t.Fatalf("unexpected refreshed metadata: %#v", got.LockfileMetadata)
 	}
 }

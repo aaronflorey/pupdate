@@ -97,11 +97,7 @@ func TestEvaluateEqualHashesSkips(t *testing.T) {
 			"composer.lock": currentHash,
 		},
 		LockfileMetadata: map[string]state.LockfileMetadata{
-			"composer.lock": {
-				Size:            info.Size(),
-				ModTimeUnixNano: info.ModTime().UTC().UnixNano(),
-				Mode:            info.Mode().String(),
-			},
+			"composer.lock": metadataForFile(info),
 		},
 	}
 
@@ -126,7 +122,51 @@ func TestEvaluateEqualHashesSkips(t *testing.T) {
 	}
 }
 
-func TestEvaluateUnchangedMetadataStillRehashesLockfile(t *testing.T) {
+func TestEvaluateMatchingIdentityAndMetadataReusesStoredHash(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "bun.lock", "same")
+	info, err := os.Stat(filepath.Join(dir, "bun.lock"))
+	if err != nil {
+		t.Fatalf("stat bun.lock: %v", err)
+	}
+
+	originalHashFile := hashFileFn
+	called := 0
+	hashFileFn = func(string) (string, error) {
+		called++
+		return hashText("same"), nil
+	}
+	t.Cleanup(func() {
+		hashFileFn = originalHashFile
+	})
+
+	current := state.Empty()
+	current.Ecosystems["node"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"bun.lock": hashText("same"),
+		},
+		LockfileMetadata: map[string]state.LockfileMetadata{
+			"bun.lock": metadataForFile(info),
+		},
+	}
+
+	results, err := Evaluate(dir, []detection.DetectionResult{{
+		Ecosystem:    detection.EcosystemNode,
+		MatchedFiles: []string{"bun.lock"},
+	}}, current)
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+	if called != 0 {
+		t.Fatalf("expected stored hash reuse when metadata and identity match, got %d hash calls", called)
+	}
+	if results[0].Decision != DecisionSkip {
+		t.Fatalf("expected DecisionSkip, got %q", results[0].Decision)
+	}
+}
+
+func TestEvaluateMatchingMetadataWithoutStrongIdentityStillRehashesLockfile(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "bun.lock", "same")
 	info, err := os.Stat(filepath.Join(dir, "bun.lock"))
@@ -167,7 +207,7 @@ func TestEvaluateUnchangedMetadataStillRehashesLockfile(t *testing.T) {
 		t.Fatalf("Evaluate returned error: %v", err)
 	}
 	if called != 1 {
-		t.Fatalf("expected lockfile hash to be recomputed even when metadata matches, got %d calls", called)
+		t.Fatalf("expected lockfile hash to be recomputed when prior state lacks strong identity, got %d calls", called)
 	}
 	if results[0].Decision != DecisionSkip {
 		t.Fatalf("expected DecisionSkip, got %q", results[0].Decision)
@@ -195,7 +235,7 @@ func TestEvaluateChangedMetadataRehashesLockfile(t *testing.T) {
 			"bun.lock": hashText("old"),
 		},
 		LockfileMetadata: map[string]state.LockfileMetadata{
-			"bun.lock": {Size: 3, ModTimeUnixNano: 1, Mode: "-rw-r--r--"},
+			"bun.lock": {Size: 3, ModTimeUnixNano: 1, Mode: "-rw-r--r--", FileID: "1:2", ChangeTimeUnixNano: 3},
 		},
 	}
 
@@ -241,11 +281,7 @@ func TestEvaluateSameMetadataDifferentContentTriggersUpdate(t *testing.T) {
 			"bun.lock": hashText("same"),
 		},
 		LockfileMetadata: map[string]state.LockfileMetadata{
-			"bun.lock": {
-				Size:            info.Size(),
-				ModTimeUnixNano: info.ModTime().UTC().UnixNano(),
-				Mode:            info.Mode().String(),
-			},
+			"bun.lock": metadataForFile(info),
 		},
 	}
 
@@ -613,6 +649,16 @@ func writeFile(t *testing.T, dir, rel, contents string) {
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 		t.Fatalf("write %s: %v", rel, err)
 	}
+}
+
+func metadataForFile(info os.FileInfo) state.LockfileMetadata {
+	metadata := state.LockfileMetadata{
+		Size:            info.Size(),
+		ModTimeUnixNano: info.ModTime().UTC().UnixNano(),
+		Mode:            info.Mode().String(),
+	}
+	enrichLockfileMetadata(info, &metadata)
+	return metadata
 }
 
 func hashText(input string) string {
