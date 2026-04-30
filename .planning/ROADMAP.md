@@ -20,7 +20,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: Backfill Verification for Ecosystem Expansion (Phase 2)** - Add missing verification artifacts for ecosystem expansion requirements.
 - [x] **Phase 7: Backfill Verification for Release and Milestone Closeout (Phase 3)** - Add missing verification artifacts for release automation and milestone closeout requirements.
 - [x] **Phase 8: Optional Audit Tech Debt Cleanup (INSERTED)** - Add regression tests and clean up low-value exports identified by the audit.
-- [ ] **Phase 9: Post-v1 Hardening and Hermeticity (INSERTED)** - Address targeted reliability, durability, and hot-path performance follow-ups identified after milestone closeout.
+- [x] **Phase 9: Post-v1 Hardening and Hermeticity (INSERTED)** - Address targeted reliability, durability, and hot-path performance follow-ups identified after milestone closeout.
+- [x] **Phase 10: Filesystem Case-Sensitivity Follow-Ups (INSERTED)** - Close the remaining case-sensitive root matching and matched-lockfile path follow-ups.
+- [ ] **Phase 11: Kasetto and Freshness Correctness Follow-Ups** - Close the latest Kasetto execution scoping and freshness correctness audit findings.
 
 ## Phase Details
 
@@ -57,6 +59,8 @@ Phases execute in numeric order: 1 → 1.1 → 1.2 → 2
 | 7. Backfill Verification for Release and Milestone Closeout (Phase 3) | 1/1 | Complete | 2026-04-08 |
 | 8. Optional Audit Tech Debt Cleanup | 1/1 | Complete | 2026-04-08 |
 | 9. Post-v1 Hardening and Hermeticity | 6/6 | Complete | 2026-04-29 |
+| 10. Filesystem Case-Sensitivity Follow-Ups | 2/2 | Complete | 2026-04-30 |
+| 11. Kasetto and Freshness Correctness Follow-Ups | 1/3 | In Progress|  |
 
 ### Phase 2: implement other package managers from IDEA.md
 
@@ -163,3 +167,16 @@ Plans:
 Plans:
 - [x] 10-01-PLAN.md — Make `root_directories` matching filesystem-aware.
 - [x] 10-02-PLAN.md — Preserve matched lockfile paths through detection and freshness.
+
+### Phase 11: kasetto and freshness correctness follow-ups
+
+**Goal:** Close the latest audit findings by making Kasetto execution project-scoped, aligning Kasetto detection/execution around explicit local configs, and restoring content-correct freshness skip behavior.
+**Requirements**: None (maintenance hardening)
+**Depends on:** Phase 10
+**Gap Closure:** Captures the new post-Phase-10 audit follow-ups for Kasetto project scoping, Kasetto local-config execution, and unsafe metadata-only lockfile hash reuse.
+**Plans:** 1/3 plans executed
+
+Plans:
+- [x] 11-01-PLAN.md — Make Kasetto execution project-scoped.
+- [ ] 11-02-PLAN.md — Align Kasetto detection and execution around explicit local configs.
+- [ ] 11-03-PLAN.md — Remove or replace metadata-only lockfile hash reuse.

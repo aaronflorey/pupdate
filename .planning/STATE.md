@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 10-02-PLAN.md and Phase 10
-last_updated: "2026-04-30T00:19:42.836Z"
+status: executing
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-04-30T00:27:50.803Z"
 last_activity: 2026-04-30
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 10
-  total_plans: 21
-  completed_plans: 21
-  percent: 100
+  total_plans: 24
+  completed_plans: 22
+  percent: 92
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Keep project dependencies up to date automatically on directory entry without slowing down shell navigation.
-**Current focus:** Phase 10 — filesystem case-sensitivity follow-ups
+**Current focus:** Phase 11 — kasetto and freshness correctness follow-ups
 
 ## Current Position
 
-Phase: 10
-Plan: Not started
-Status: Milestone complete
+Phase: 11 (kasetto and freshness correctness follow-ups) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-04-30
 
-Progress: [██████████] 100%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [██████████] 100%
 | 8 | 1 | 6 min | 6 min |
 | 09 | 6 | - | - |
 | 10 | 2 | - | - |
+| 11 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -95,6 +96,7 @@ Recent decisions affecting current work:
 - [Phase 08]: Remove low-value exported helpers only when they are truly package-local and existing regression coverage already closes the behavioral audit risk.
 - [Phase 09]: Track each requested post-v1 hardening item as its own plan so execution can stay narrow and verification can remain package-scoped.
 - [Phase 10]: Split the remaining filesystem case-sensitivity work into one plan for `root_directories` matching semantics and one plan for preserving actual matched lockfile paths through freshness.
+- [Phase 11]: Split the latest audit follow-up into one Kasetto execution-scoping plan, one Kasetto config-alignment plan, and one freshness-correctness plan so install and hashing changes stay independently verifiable.
 
 ### Roadmap Evolution
 
@@ -108,11 +110,13 @@ Recent decisions affecting current work:
 - Phase 8 completed: optional audit tech-debt cleanup applied.
 - Phase 9 added: post-v1 hardening and hermeticity maintenance follow-up planned.
 - Phase 10 added: filesystem case-sensitivity maintenance follow-up planned.
+- Phase 11 added: Kasetto and freshness correctness maintenance follow-up planned.
 
 ### Pending Todos
 
-- Execute `10-01-PLAN.md` to make `root_directories` matching filesystem-aware.
-- Execute `10-02-PLAN.md` to preserve actual matched lockfile paths through detection and freshness.
+- Execute `11-01-PLAN.md` to make Kasetto execution project-scoped.
+- Execute `11-02-PLAN.md` to align Kasetto detection and execution around explicit local configs.
+- Execute `11-03-PLAN.md` to remove or replace metadata-only lockfile hash reuse.
 
 ### Blockers/Concerns
 
@@ -120,6 +124,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-30T00:19:42.822Z
-Stopped at: Completed 10-02-PLAN.md and Phase 10
+Last session: 2026-04-30T00:27:50.790Z
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None

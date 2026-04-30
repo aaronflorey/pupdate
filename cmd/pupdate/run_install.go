@@ -105,7 +105,7 @@ func selectManagerPlan(result detection.DetectionResult, allowScripts bool) (man
 		if result.Managers[0] != "kst" {
 			return managerPlan{}, false, fmt.Sprintf("unsupported Kasetto manager %q; skipping install", result.Managers[0])
 		}
-		return managerPlan{Manager: "kst", Args: []string{"sync"}}, true, ""
+		return managerPlan{Manager: "kst", Args: []string{"sync", "--project"}}, true, ""
 	case detection.EcosystemGo:
 		return buildInstallPlan("gomod", managers.CommandInput{})
 	case detection.EcosystemRust:
