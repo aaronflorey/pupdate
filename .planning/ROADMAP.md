@@ -23,7 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 9: Post-v1 Hardening and Hermeticity (INSERTED)** - Address targeted reliability, durability, and hot-path performance follow-ups identified after milestone closeout.
 - [x] **Phase 10: Filesystem Case-Sensitivity Follow-Ups (INSERTED)** - Close the remaining case-sensitive root matching and matched-lockfile path follow-ups.
 - [x] **Phase 11: Kasetto and Freshness Correctness Follow-Ups** - Close the latest Kasetto execution scoping and freshness correctness audit findings. (completed 2026-04-30)
-- [ ] **Phase 12: Release Automation and Planning State Follow-Ups** - Reconcile duplicate release workflows and resynchronize stale roadmap/state metadata after Phase 11 closeout.
+- [x] **Phase 12: Release Automation and Planning State Follow-Ups** - Reconcile duplicate release workflows and resynchronize stale roadmap/state metadata after Phase 11 closeout. (completed 2026-04-30)
 
 ## Phase Details
 
@@ -62,7 +62,7 @@ Phases execute in numeric order: 1 → 1.1 → 1.2 → 2
 | 9. Post-v1 Hardening and Hermeticity | 6/6 | Complete | 2026-04-29 |
 | 10. Filesystem Case-Sensitivity Follow-Ups | 2/2 | Complete | 2026-04-30 |
 | 11. Kasetto and Freshness Correctness Follow-Ups | 3/3 | Complete    | 2026-04-30 |
-| 12. Release Automation and Planning State Follow-Ups | 1/2 | In Progress|  |
+| 12. Release Automation and Planning State Follow-Ups | 2/2 | Complete    | 2026-04-30 |
 
 ### Phase 2: implement other package managers from IDEA.md
 
@@ -189,8 +189,8 @@ Plans:
 **Requirements**: None (maintenance hardening)
 **Depends on:** Phase 11
 **Gap Closure:** Captures the new maintenance follow-ups for duplicate release workflow drift, Homebrew token wiring alignment, and stale roadmap/state metadata after Phase 11 completion.
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 12-01-PLAN.md — Reconcile duplicate release automation workflows.
-- [ ] 12-02-PLAN.md — Resynchronize stale roadmap and state metadata.
+- [x] 12-02-PLAN.md — Resynchronize stale roadmap and state metadata.
