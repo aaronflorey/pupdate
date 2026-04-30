@@ -33,3 +33,6 @@ jobs:
 
       - name: Run tests
         run: go test ./... -count=1
+
+      - name: Run hot-path benchmarks
+        run: go test ./internal/detection ./internal/freshness -run '^$' -bench 'Benchmark(DetectProjectTree|HashMatchedFiles)$' -count=1

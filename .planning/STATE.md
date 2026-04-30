@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-stopped_at: Completed Phase 15 plan 02 diagnostic command
-last_updated: "2026-04-30T05:05:00Z"
+stopped_at: Completed Phase 15 plan 04 performance guardrails
+last_updated: "2026-04-30T06:00:00Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 15
   completed_phases: 14
   total_plans: 36
-  completed_plans: 32
-  percent: 89
+  completed_plans: 34
+  percent: 94
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Keep project dependencies up to date automatically on directory entry without slowing down shell navigation.
-**Current focus:** Phase 15 plan 03 stale state pruning
+**Current focus:** Phase 15 plan 05 config expansion
 
 ## Current Position
 
 Phase: 15
-Plan: 03
-Status: Phase 15 plan 02 complete; stale state pruning next
+Plan: 05
+Status: Phase 15 plan 04 complete; config expansion next
 Last activity: 2026-04-30
 
 Progress: [█████████░] 89%
@@ -106,6 +106,7 @@ Recent decisions affecting current work:
 - [Phase 14]: Keep the final post-Phase-13 cleanup documentation/planning-only by isolating README config-behavior drift from the separate Phase 10-13 validation/process metadata reconciliation.
 - [Phase 15]: Track each newly approved maintenance improvement as its own plan so freshness optimization, diagnostics, stale-state cleanup, performance guardrails, config expansion, and async hook behavior can be executed independently.
 - [Phase 15]: Use a read-only `status` command, not `doctor`, and drive it from the real run/config/freshness pipeline so troubleshooting output stays behaviorally accurate.
+- [Phase 15]: Protect hot-path freshness performance with a relative stored-hash-versus-rehash guardrail and capture targeted detection/freshness benchmarks in CI logs instead of enforcing flaky absolute runtime budgets.
 
 ### Roadmap Evolution
 
@@ -125,11 +126,11 @@ Recent decisions affecting current work:
 - Phase 14 added: final documentation and process cleanup follow-up planned.
 - Phase 14 completed: README config behavior and later maintenance-phase process metadata reconciled.
 - Phase 15 added: performance, diagnostics, and config/hook maintenance follow-up planned.
+- Phase 15 plan 03 completed: stale `.pupdate` target entries are pruned without mutating still-active state.
+- Phase 15 plan 04 completed: hot-path benchmarks and relative freshness latency guardrails added.
 
 ### Pending Todos
 
-- Phase 15 plan 03: prune stale `.pupdate` entries when tracked targets disappear.
-- Phase 15 plan 04: add benchmarks and CI latency/performance guardrails.
 - Phase 15 plan 05: expand user config beyond `root_directories`.
 - Phase 15 plan 06: add an opt-in async/background hook mode.
 
@@ -139,6 +140,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-30T05:05:00Z
-Stopped at: Completed Phase 15 plan 02 diagnostic command
-Resume file: .planning/phases/15-performance-diagnostics-and-config-hook-follow-ups/15-03-PLAN.md
+Last session: 2026-04-30T06:00:00Z
+Stopped at: Completed Phase 15 plan 04 performance guardrails
+Resume file: .planning/phases/15-performance-diagnostics-and-config-hook-follow-ups/15-05-PLAN.md

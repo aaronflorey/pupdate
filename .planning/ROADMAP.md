@@ -236,7 +236,7 @@ Plans:
 Plans:
 - [x] 15-01-PLAN.md — Reuse stored lockfile metadata to short-circuit hot-path freshness hashing where safe.
 - [x] 15-02-PLAN.md — Add a `pupdate status` or `pupdate doctor` diagnostic command.
-- [ ] 15-03-PLAN.md — Prune stale `.pupdate` entries when tracked ecosystems or directories disappear.
-- [ ] 15-04-PLAN.md — Add benchmarks and CI latency/performance guardrails.
+- [x] 15-03-PLAN.md — Prune stale `.pupdate` entries when tracked ecosystems or directories disappear.
+- [x] 15-04-PLAN.md — Add benchmarks and CI latency/performance guardrails.
 - [ ] 15-05-PLAN.md — Expand user config beyond `root_directories`.
 - [ ] 15-06-PLAN.md — Add an opt-in async/background shell hook mode.
