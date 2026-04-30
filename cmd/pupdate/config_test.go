@@ -142,12 +142,12 @@ func TestIsTopLevelDirectoryWithinRoot(t *testing.T) {
 	}
 }
 
-func TestIsTopLevelDirectoryWithinRootIsCaseInsensitive(t *testing.T) {
+func TestIsTopLevelDirectoryWithinRootRequiresMatchingCase(t *testing.T) {
 	root := filepath.Join(string(filepath.Separator), "tmp", "code")
 	topLevelProject := filepath.Join(root, "my-project")
 	configuredRoot := filepath.Join(string(filepath.Separator), "TMP", "CODE")
 
-	if !isTopLevelDirectoryWithinRoot(topLevelProject, configuredRoot) {
-		t.Fatalf("expected top-level project to match configured root case-insensitively")
+	if isTopLevelDirectoryWithinRoot(topLevelProject, configuredRoot) {
+		t.Fatalf("expected top-level project not to match configured root with different casing")
 	}
 }
