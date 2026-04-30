@@ -8,6 +8,7 @@ import (
 
 func newInitCmd() *cobra.Command {
 	var shell string
+	var mode string
 
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -15,7 +16,8 @@ func newInitCmd() *cobra.Command {
 		Long:  "Print the shell hook snippet for bash, zsh, or fish.",
 		Example: `eval "$(pupdate init --shell bash)"
 eval "$(pupdate init --shell zsh)"
-eval "$(pupdate init --shell fish)"`,
+eval "$(pupdate init --shell fish)"
+eval "$(pupdate init --shell bash --mode async)"`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolved, err := resolveShell(shell)
@@ -23,7 +25,12 @@ eval "$(pupdate init --shell fish)"`,
 				return err
 			}
 
-			snippet, err := initSnippetForShell(resolved)
+			resolvedMode, err := resolveHookMode(mode)
+			if err != nil {
+				return err
+			}
+
+			snippet, err := initSnippetForShell(resolved, resolvedMode)
 			if err != nil {
 				return err
 			}
@@ -34,5 +41,6 @@ eval "$(pupdate init --shell fish)"`,
 	}
 
 	cmd.Flags().StringVar(&shell, "shell", "", "shell to configure (bash, zsh, or fish)")
+	cmd.Flags().StringVar(&mode, "mode", hookModeForeground, "hook execution mode (foreground or async)")
 	return cmd
 }

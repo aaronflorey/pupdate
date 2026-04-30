@@ -9,6 +9,11 @@ import (
 
 var supportedInitShells = []string{"bash", "zsh", "fish"}
 
+const (
+	hookModeForeground = "foreground"
+	hookModeAsync      = "async"
+)
+
 func resolveShell(requested string) (string, error) {
 	if requested != "" {
 		resolved := strings.ToLower(requested)
@@ -34,6 +39,20 @@ func resolveShell(requested string) (string, error) {
 
 func supportedInitShellsText() string {
 	return strings.Join(supportedInitShells, ", ")
+}
+
+func resolveHookMode(requested string) (string, error) {
+	resolved := strings.ToLower(strings.TrimSpace(requested))
+	if resolved == "" {
+		return hookModeForeground, nil
+	}
+
+	switch resolved {
+	case hookModeForeground, hookModeAsync:
+		return resolved, nil
+	default:
+		return "", fmt.Errorf("unsupported hook mode %q; supported modes: %s, %s", requested, hookModeForeground, hookModeAsync)
+	}
 }
 
 func isSupportedInitShell(shell string) bool {

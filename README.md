@@ -61,6 +61,12 @@ eval "$(pupdate init --shell zsh)"
 eval "$(pupdate init --shell fish)"
 ```
 
+Opt into background hook execution:
+
+```bash
+eval "$(pupdate init --shell bash --mode async)"
+```
+
 Escaped form for docs or templates that need literal shell interpolation text:
 
 ```bash
@@ -69,9 +75,13 @@ eval "\$(pupdate init --shell zsh)"
 eval "\$(pupdate init --shell fish)"
 ```
 
-The generated hooks run `pupdate run --quiet` on directory changes, but skip
+The generated hooks run `pupdate hook --quiet` on directory changes, but skip
 launching from `$HOME`. Quiet mode stays silent for no-op runs and only prints
 status when an update actually executes.
+
+`pupdate init --mode async` keeps the default hook behavior opt-in and launches
+the same quiet run flow in the background. Overlapping background runs in the
+same repo are skipped while a recent `.pupdate.hook.lock` exists.
 
 ## What It Does
 
@@ -138,6 +148,7 @@ Prints the shell hook snippet for `bash`, `zsh`, or `fish`.
 Flags:
 
 - `--shell <bash|zsh|fish>`: choose the shell explicitly
+- `--mode <foreground|async>`: keep the default foreground hook, or opt into a background hook that detaches update execution from the shell transition
 
 ### `pupdate config`
 
@@ -163,6 +174,7 @@ Output includes:
 - overall `run_status` and `run_reason` for the current directory
 - config path, existence, and resolved `root_directories`
 - configured and effective `quiet` / `allow_scripts` run defaults
+- background hook lock path and whether a detached hook run is currently active
 - `.pupdate` path, existence, and any state decode warnings
 - one section per detected target with matched files, freshness result, install readiness, and resolved manager path
 
@@ -209,4 +221,5 @@ from shell history or logs.
 - `.pupignore` short-circuits the full run for a repository before detection and state checks.
 - `root_directories` can restrict runs to top-level project directories under specific roots.
 - Hook-driven runs remain non-blocking and avoid launching from `$HOME`.
+- Async hook mode is optional and skips overlapping background runs per repo using `.pupdate.hook.lock`.
 - Git submodule status failures are surfaced as stderr errors without crashing the command.
