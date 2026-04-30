@@ -33,7 +33,7 @@ Requires [`bin`](https://github.com/aaronflorey/bin) to be installed and availab
 
 ## Release and CI
 
-- CI runs on pull requests and pushes to `main` across Linux, macOS, and Windows.
+- CI runs on pull requests and pushes to `main` across Linux and macOS.
 - `release-please` maintains changelog and semver release PRs.
 - GoReleaser publishes tagged release binaries and updates Homebrew tap artifacts.
 - Release notes are published on the [GitHub Releases page](https://github.com/aaronflorey/pupdate/releases).
