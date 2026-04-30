@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-stopped_at: Completed Phase 15 plan 01 safe lockfile metadata reuse
-last_updated: "2026-04-30T04:20:00Z"
+stopped_at: Completed Phase 15 plan 02 diagnostic command
+last_updated: "2026-04-30T05:05:00Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 15
   completed_phases: 14
   total_plans: 36
-  completed_plans: 31
-  percent: 86
+  completed_plans: 32
+  percent: 89
 ---
 
 # Project State
@@ -21,24 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Keep project dependencies up to date automatically on directory entry without slowing down shell navigation.
-**Current focus:** Phase 15 plan 02 diagnostic command
+**Current focus:** Phase 15 plan 03 stale state pruning
 
 ## Current Position
 
 Phase: 15
-Plan: 02
-Status: Phase 15 plan 01 complete; diagnostic command next
+Plan: 03
+Status: Phase 15 plan 02 complete; stale state pruning next
 Last activity: 2026-04-30
 
-Progress: [█████████░] 86%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 31
+- Total plans completed: 32
 - Average duration: ~14 min
-- Total execution time: ~2.1 hours
+- Total execution time: ~2.5 hours
 
 **By Phase:**
 
@@ -105,6 +105,7 @@ Recent decisions affecting current work:
 - [Phase 13]: Keep the final post-Phase-12 cleanup documentation-only by splitting release-planning/state reference updates from the README CI platform correction.
 - [Phase 14]: Keep the final post-Phase-13 cleanup documentation/planning-only by isolating README config-behavior drift from the separate Phase 10-13 validation/process metadata reconciliation.
 - [Phase 15]: Track each newly approved maintenance improvement as its own plan so freshness optimization, diagnostics, stale-state cleanup, performance guardrails, config expansion, and async hook behavior can be executed independently.
+- [Phase 15]: Use a read-only `status` command, not `doctor`, and drive it from the real run/config/freshness pipeline so troubleshooting output stays behaviorally accurate.
 
 ### Roadmap Evolution
 
@@ -127,7 +128,6 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Phase 15 plan 02: add a diagnostic command (`status` or `doctor`).
 - Phase 15 plan 03: prune stale `.pupdate` entries when tracked targets disappear.
 - Phase 15 plan 04: add benchmarks and CI latency/performance guardrails.
 - Phase 15 plan 05: expand user config beyond `root_directories`.
@@ -139,6 +139,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-30T04:20:00Z
-Stopped at: Completed Phase 15 plan 01 safe lockfile metadata reuse
-Resume file: .planning/phases/15-performance-diagnostics-and-config-hook-follow-ups/15-02-PLAN.md
+Last session: 2026-04-30T05:05:00Z
+Stopped at: Completed Phase 15 plan 02 diagnostic command
+Resume file: .planning/phases/15-performance-diagnostics-and-config-hook-follow-ups/15-03-PLAN.md

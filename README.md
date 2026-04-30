@@ -79,6 +79,7 @@ status when an update actually executes.
 - resolves manager binaries from your current `PATH`
 - skips work when dependency inputs are unchanged since the last successful run
 - stores local state in `.pupdate`
+- explains current detection, freshness, config, and PATH readiness with `pupdate status`
 - respects `.pupignore` to skip the full run (detection, freshness checks, and installs)
 - uses safe defaults and requires explicit opt-in for lifecycle scripts
 
@@ -147,6 +148,19 @@ Output includes:
 - whether the config file currently exists
 - the configured `root_directories` values from the file
 - the resolved `root_directories` values after `~` expansion and path normalization
+
+### `pupdate status`
+
+Prints a read-only diagnostic snapshot for the current directory so you can see
+whether `pupdate run` would skip, wait, or be blocked before it actually tries
+to execute anything.
+
+Output includes:
+
+- overall `run_status` and `run_reason` for the current directory
+- config path, existence, and resolved `root_directories`
+- `.pupdate` path, existence, and any state decode warnings
+- one section per detected target with matched files, freshness result, install readiness, and resolved manager path
 
 ## How It Works
 
