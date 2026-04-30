@@ -15,7 +15,7 @@ tech-stack:
 key-files:
   created:
     - .github/workflows/ci.yml
-    - .github/workflows/release.yml
+    - .github/workflows/release.yaml
     - release-please-config.json
     - .release-please-manifest.json
   modified:
@@ -37,12 +37,12 @@ Release automation is now wired end-to-end with CI checks on `main`/PRs, Release
 - `go test ./... -count=1` passes.
 - Workflow trigger scopes now map to plan intent:
   - `ci.yml`: pull_request + push to `main`
-  - `release.yml`: push to `main`/`master`, then Release Please conditionally runs GoReleaser against the created tag
+  - `release.yaml`: push to `main`/`master`, then Release Please conditionally runs GoReleaser against the created tag
 
 ## Files Created/Modified
 
 - `.github/workflows/ci.yml` - Adds test gate on PR/main pushes.
-- `.github/workflows/release.yml` - Runs Release Please and then GoReleaser against the created release tag with Homebrew token wiring.
+- `.github/workflows/release.yaml` - Runs Release Please on pushes to `main`/`master` and then GoReleaser against the created release tag with Homebrew token wiring.
 - `release-please-config.json` - Defines root Go package release strategy.
 - `.release-please-manifest.json` - Tracks current root package version state.
 - `README.md` - Documents release flow entry points.

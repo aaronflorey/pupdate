@@ -9,7 +9,7 @@ evidence_sources:
   - .planning/phases/03-v1-release-automation-and-milestone-closeout/03-02-SUMMARY.md
   - .planning/phases/03-v1-release-automation-and-milestone-closeout/03-VALIDATION.md
   - .github/workflows/ci.yml
-  - .github/workflows/release.yml
+  - .github/workflows/release.yaml
   - .goreleaser.yaml
   - release-please-config.json
   - .release-please-manifest.json
@@ -28,8 +28,8 @@ This artifact backfills the required phase-level verification record for release
 | Requirement | Status | Evidence |
 |-------------|--------|----------|
 | REL-01 | verified | `03-01-SUMMARY.md`; `release-please-config.json` and `.release-please-manifest.json` define Release Please manifest-mode configuration for the root package |
-| REL-02 | verified | `03-01-SUMMARY.md`; `.github/workflows/ci.yml` and `.github/workflows/release.yml` wire CI and release orchestration on the documented trigger scopes |
-| REL-03 | verified | `03-01-SUMMARY.md`; `.github/workflows/release.yml` runs GoReleaser against the Release Please-created tag using `.goreleaser.yaml` |
+| REL-02 | verified | `03-01-SUMMARY.md`; `.github/workflows/ci.yml` and `.github/workflows/release.yaml` wire CI and release orchestration on the documented trigger scopes |
+| REL-03 | verified | `03-01-SUMMARY.md`; `.github/workflows/release.yaml` runs GoReleaser after Release Please creates a release, checking out `needs.release-please.outputs.tag_name` and using `.goreleaser.yaml` |
 | MILE-02 | verified | `03-02-SUMMARY.md`; `.planning/PROJECT.md`, `.planning/ROADMAP.md`, `.planning/STATE.md`, and `.planning/REQUIREMENTS.md` were synchronized during milestone closeout |
 
 ## Notes

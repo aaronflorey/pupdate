@@ -24,6 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 10: Filesystem Case-Sensitivity Follow-Ups (INSERTED)** - Close the remaining case-sensitive root matching and matched-lockfile path follow-ups.
 - [x] **Phase 11: Kasetto and Freshness Correctness Follow-Ups** - Close the latest Kasetto execution scoping and freshness correctness audit findings. (completed 2026-04-30)
 - [x] **Phase 12: Release Automation and Planning State Follow-Ups** - Reconcile duplicate release workflows and resynchronize stale roadmap/state metadata after Phase 11 closeout. (completed 2026-04-30)
+- [ ] **Phase 13: Final Milestone Audit Documentation Drift Follow-Ups** - Correct the remaining release-planning and CI-platform documentation drift after the Phase 12 workflow cleanup.
 
 ## Phase Details
 
@@ -63,6 +64,7 @@ Phases execute in numeric order: 1 → 1.1 → 1.2 → 2
 | 10. Filesystem Case-Sensitivity Follow-Ups | 2/2 | Complete | 2026-04-30 |
 | 11. Kasetto and Freshness Correctness Follow-Ups | 3/3 | Complete    | 2026-04-30 |
 | 12. Release Automation and Planning State Follow-Ups | 2/2 | Complete    | 2026-04-30 |
+| 13. Final Milestone Audit Documentation Drift Follow-Ups | 1/2 | In Progress|  |
 
 ### Phase 2: implement other package managers from IDEA.md
 
@@ -194,3 +196,15 @@ Plans:
 Plans:
 - [x] 12-01-PLAN.md — Reconcile duplicate release automation workflows.
 - [x] 12-02-PLAN.md — Resynchronize stale roadmap and state metadata.
+
+### Phase 13: final milestone audit documentation drift follow-ups
+
+**Goal:** Close the remaining milestone-audit documentation drift by aligning release-planning references with the surviving `release.yaml` workflow and correcting the README CI platform claim to match the actual CI matrix.
+**Requirements**: None (documentation maintenance)
+**Depends on:** Phase 12
+**Gap Closure:** Captures the last post-Phase-12 documentation-only follow-ups for stale release-workflow references in planning/state artifacts and the README CI platform mismatch.
+**Plans:** 1/2 plans executed
+
+Plans:
+- [x] 13-01-PLAN.md — Update release-planning documentation and state text for the surviving `release.yaml` model.
+- [ ] 13-02-PLAN.md — Correct the README CI platform claim to match `ci.yml`.

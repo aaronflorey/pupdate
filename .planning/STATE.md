@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 12-02-PLAN.md and Phase 12
-last_updated: "2026-04-30T00:45:52.190Z"
+status: executing
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-04-30T00:53:18.284Z"
 last_activity: 2026-04-30
 progress:
-  total_phases: 12
+  total_phases: 13
   completed_phases: 12
-  total_plans: 26
-  completed_plans: 26
-  percent: 100
+  total_plans: 28
+  completed_plans: 27
+  percent: 96
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Keep project dependencies up to date automatically on directory entry without slowing down shell navigation.
-**Current focus:** Phase 12 — release automation and planning state follow-ups
+**Current focus:** Phase 13 — final milestone-audit documentation drift follow-ups
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
-Status: Milestone complete
+Phase: 13 (final milestone-audit documentation drift follow-ups) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-04-30
 
-Progress: [██████████] 100%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100%
 | 10 | 2 | - | - |
 | 11 | 3 | - | - |
 | 12 | 2 | - | - |
+| 13 | 0 | - | - |
 
 **Recent Trend:**
 
@@ -88,7 +89,7 @@ Recent decisions affecting current work:
 - [Phase 02]: Model git as first-class ecosystem to route submodule freshness and execution through existing detection/run pipelines.
 - [Phase 02]: Treat git submodule status command failures as non-blocking errors surfaced via stderr, not hard command failures.
 - [Phase 03]: Use Release Please manifest mode with a single root Go package (`pupdate`) for semver automation.
-- [Phase 03]: Trigger GoReleaser from `v*` tag pushes so release artifacts remain tied to tagged versions.
+- [Phase 03]: Run GoReleaser from the tag created by the push-triggered `release.yaml` workflow so release artifacts remain tied to released versions without a duplicate release path.
 - [Phase 04]: Keep `--quiet` limited to stdout and child command noise so shell hooks still surface stderr status lines.
 - [Phase 04]: Allow lifecycle scripts only through an explicit `--allow-scripts` flag to preserve safe defaults.
 - [Phase 05]: Backfill missing verification artifacts from existing summaries and tests instead of reopening Phase 1 implementation scope.
@@ -99,6 +100,7 @@ Recent decisions affecting current work:
 - [Phase 10]: Split the remaining filesystem case-sensitivity work into one plan for `root_directories` matching semantics and one plan for preserving actual matched lockfile paths through freshness.
 - [Phase 11]: Split the latest audit follow-up into one Kasetto execution-scoping plan, one Kasetto config-alignment plan, and one freshness-correctness plan so install and hashing changes stay independently verifiable.
 - [Phase 12]: Split the latest post-Phase-11 audit follow-up into one release-automation-path plan and one roadmap/state resynchronization plan so workflow cleanup and planning-state cleanup stay independently verifiable.
+- [Phase 13]: Keep the final post-Phase-12 cleanup documentation-only by splitting release-planning/state reference updates from the README CI platform correction.
 
 ### Roadmap Evolution
 
@@ -114,10 +116,12 @@ Recent decisions affecting current work:
 - Phase 10 added: filesystem case-sensitivity maintenance follow-up planned.
 - Phase 11 added: Kasetto and freshness correctness maintenance follow-up planned.
 - Phase 12 added: release automation and planning state maintenance follow-up planned.
+- Phase 13 added: final milestone-audit documentation drift follow-up planned.
 
 ### Pending Todos
 
-- None.
+- 13-01-PLAN.md - Update release-planning documentation and state text for the surviving `release.yaml` model.
+- 13-02-PLAN.md - Correct the README CI platform claim to match `ci.yml`.
 
 ### Blockers/Concerns
 
@@ -125,6 +129,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-30T00:45:52.179Z
-Stopped at: Completed 12-02-PLAN.md and Phase 12
+Last session: 2026-04-30T00:53:18.274Z
+Stopped at: Completed 13-01-PLAN.md
 Resume file: None
