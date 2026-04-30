@@ -69,7 +69,7 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 	}
 
 	outcomes := executeRunResults(cmd, execution.Results, execution.DecisionByEcosystem, options, installDisabled)
-	return saveSuccessfulRunOutcomes(execution.Store, execution.CurrentState, outcomes)
+	return saveRunOutcomes(execution.Store, execution.CurrentState, outcomes)
 }
 
 func isOutsideConfiguredRootDirectories() (bool, error) {
@@ -163,7 +163,13 @@ func executeRunResult(
 	target := resultTarget(result)
 	if decision.Decision != freshness.DecisionUpdate {
 		printSkipDecision(cmd, options.Quiet, result, decision, target)
-		return ecosystemOutcome{}, false
+		refreshMetadata := shouldRefreshMetadata(result, decision)
+		return ecosystemOutcome{
+			StateKey:         result.StateKey(),
+			RefreshMetadata:  refreshMetadata,
+			Lockfiles:        decision.Lockfiles,
+			LockfileMetadata: decision.LockfileMetadata,
+		}, refreshMetadata
 	}
 	if installDisabled {
 		return ecosystemOutcome{}, false
@@ -198,6 +204,16 @@ func executeRunResult(
 		Lockfiles:        decision.Lockfiles,
 		LockfileMetadata: decision.LockfileMetadata,
 	}, true
+}
+
+func shouldRefreshMetadata(result detection.DetectionResult, decision freshness.EcosystemDecision) bool {
+	if decision.Decision != freshness.DecisionSkip {
+		return false
+	}
+	if result.Ecosystem == detection.EcosystemGit {
+		return false
+	}
+	return len(decision.Lockfiles) > 0 && len(decision.LockfileMetadata) > 0
 }
 
 func printSkipDecision(cmd *cobra.Command, quiet bool, result detection.DetectionResult, decision freshness.EcosystemDecision, target string) {

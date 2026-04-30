@@ -22,9 +22,11 @@ type EcosystemState struct {
 }
 
 type LockfileMetadata struct {
-	Size            int64  `json:"size"`
-	ModTimeUnixNano int64  `json:"mod_time_unix_nano"`
-	Mode            string `json:"mode,omitempty"`
+	Size               int64  `json:"size"`
+	ModTimeUnixNano    int64  `json:"mod_time_unix_nano"`
+	Mode               string `json:"mode,omitempty"`
+	FileID             string `json:"file_id,omitempty"`
+	ChangeTimeUnixNano int64  `json:"change_time_unix_nano,omitempty"`
 }
 
 func Empty() FileState {
