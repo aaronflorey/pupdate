@@ -18,6 +18,8 @@ type statusSnapshot struct {
 	RunStatus        string
 	RunReason        string
 	RunOptions       runOptions
+	HookLockPath     string
+	HookLockStatus   string
 	ConfigPath       string
 	ConfigExists     bool
 	RawConfig        userConfig
@@ -100,6 +102,13 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 		StateExists:      stateExists,
 		StateWarnings:    warnings,
 	}
+
+	hookLockPath, hookLockStatus, err := currentBackgroundHookStatus(".", backgroundHookNow())
+	if err != nil {
+		return statusSnapshot{}, err
+	}
+	snapshot.HookLockPath = hookLockPath
+	snapshot.HookLockStatus = hookLockStatus
 
 	repoStatus, repoReason, err := statusPrecheck(resolvedConfig)
 	if err != nil {
@@ -312,6 +321,12 @@ func writeStatusSnapshot(w io.Writer, snapshot statusSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "effective_allow_scripts: %t\n\n", snapshot.RunOptions.AllowScripts); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "background_hook_lock_path: %s\n", snapshot.HookLockPath); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "background_hook_lock_status: %s\n\n", snapshot.HookLockStatus); err != nil {
 		return err
 	}
 

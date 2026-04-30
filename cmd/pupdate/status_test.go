@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/freshness"
@@ -71,6 +72,9 @@ func TestStatusShowsReadyTarget(t *testing.T) {
 	out := stdout.String()
 	if !strings.Contains(out, "run_status: ready") {
 		t.Fatalf("expected ready run status, got %q", out)
+	}
+	if !strings.Contains(out, "background_hook_lock_status: idle") {
+		t.Fatalf("expected idle background hook status, got %q", out)
 	}
 	if !strings.Contains(out, "run_reason: 1 ecosystem needs updates") {
 		t.Fatalf("expected ready run reason, got %q", out)
@@ -142,8 +146,42 @@ func TestStatusShowsRepoSkipForPupIgnore(t *testing.T) {
 	if !strings.Contains(out, "detected_targets: 0") {
 		t.Fatalf("expected zero detected targets, got %q", out)
 	}
+	if !strings.Contains(out, "background_hook_lock_status: idle") {
+		t.Fatalf("expected idle background hook status, got %q", out)
+	}
 	if detectCalls != 0 {
 		t.Fatalf("expected detectFn to be skipped, got %d calls", detectCalls)
+	}
+}
+
+func TestStatusShowsActiveBackgroundHookLock(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, backgroundHookLockFileName)
+	withChdir(t, dir)
+
+	now := time.Now()
+	lockPath := filepath.Join(dir, backgroundHookLockFileName)
+	if err := os.Chtimes(lockPath, now, now); err != nil {
+		t.Fatalf("touch lock file: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("status command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "background_hook_lock_status: active") {
+		t.Fatalf("expected active background hook status, got %q", out)
+	}
+	if !strings.Contains(out, "background_hook_lock_path: "+filepath.Join(".", backgroundHookLockFileName)) {
+		t.Fatalf("expected background hook lock path, got %q", out)
 	}
 }
 
