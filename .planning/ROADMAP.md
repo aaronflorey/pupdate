@@ -26,6 +26,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 12: Release Automation and Planning State Follow-Ups** - Reconcile duplicate release workflows and resynchronize stale roadmap/state metadata after Phase 11 closeout. (completed 2026-04-30)
 - [x] **Phase 13: Final Milestone Audit Documentation Drift Follow-Ups** - Correct the remaining release-planning and CI-platform documentation drift after the Phase 12 workflow cleanup. (completed 2026-04-30)
 - [x] **Phase 14: Final Documentation and Process Cleanup** - Align README config behavior docs with current missing-config semantics and reconcile Phase 10-13 validation/process metadata drift. (completed 2026-04-30)
+- [ ] **Phase 15: Performance, Diagnostics, and Config/Hook Follow-Ups** - Capture the next approved maintenance improvements for freshness performance, diagnostics, state cleanup, config breadth, and opt-in hook execution modes.
 
 ## Phase Details
 
@@ -67,6 +68,7 @@ Phases execute in numeric order: 1 → 1.1 → 1.2 → 2
 | 12. Release Automation and Planning State Follow-Ups | 2/2 | Complete    | 2026-04-30 |
 | 13. Final Milestone Audit Documentation Drift Follow-Ups | 2/2 | Complete    | 2026-04-30 |
 | 14. Final Documentation and Process Cleanup | 2/2 | Complete | 2026-04-30 |
+| 15. Performance, Diagnostics, and Config/Hook Follow-Ups | 0/6 | Planned | |
 
 ### Phase 2: implement other package managers from IDEA.md
 
@@ -222,3 +224,19 @@ Plans:
 Plans:
 - [x] 14-01-PLAN.md — Update README config behavior docs for non-auto-creating missing-config defaults.
 - [x] 14-02-PLAN.md — Reconcile Phase 10-13 validation/process metadata with the actual planning artifacts.
+
+### Phase 15: performance, diagnostics, and config/hook follow-ups
+
+**Goal:** Land the next approved maintenance improvements by tightening safe hot-path freshness reuse, improving operator diagnostics, pruning stale state, broadening config surface area, and adding optional asynchronous hook execution without reopening milestone-scale scope.
+**Requirements**: None (maintenance hardening)
+**Depends on:** Phase 14
+**Gap Closure:** Captures the newly approved post-Phase-14 maintenance work for safe lockfile-metadata reuse, a diagnostic command, stale-state pruning, latency guardrails, broader user config, and an opt-in background hook mode.
+**Plans:** 6 plans
+
+Plans:
+- [ ] 15-01-PLAN.md — Reuse stored lockfile metadata to short-circuit hot-path freshness hashing where safe.
+- [ ] 15-02-PLAN.md — Add a `pupdate status` or `pupdate doctor` diagnostic command.
+- [ ] 15-03-PLAN.md — Prune stale `.pupdate` entries when tracked ecosystems or directories disappear.
+- [ ] 15-04-PLAN.md — Add benchmarks and CI latency/performance guardrails.
+- [ ] 15-05-PLAN.md — Expand user config beyond `root_directories`.
+- [ ] 15-06-PLAN.md — Add an opt-in async/background shell hook mode.

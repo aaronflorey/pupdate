@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: complete
-stopped_at: Completed Phase 14 cleanup and reran milestone audit
-last_updated: "2026-04-30T02:35:00Z"
+status: active
+stopped_at: Planned Phase 15 maintenance follow-up and synchronized roadmap/state
+last_updated: "2026-04-30T03:08:00Z"
 last_activity: 2026-04-30
 progress:
-  total_phases: 14
+  total_phases: 15
   completed_phases: 14
-  total_plans: 30
+  total_plans: 36
   completed_plans: 30
-  percent: 100
+  percent: 83
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Keep project dependencies up to date automatically on directory entry without slowing down shell navigation.
-**Current focus:** Milestone v1.0 complete
+**Current focus:** Phase 15 maintenance follow-up planning complete; execution not started
 
 ## Current Position
 
-Phase: 14
-Plan: 02
-Status: Milestone closeout complete
+Phase: 15
+Plan: 01
+Status: Planned maintenance follow-up
 Last activity: 2026-04-30
 
-Progress: [██████████] 100%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100%
 | 12 | 2 | - | - |
 | 13 | 2 | - | - |
 | 14 | 2 | - | - |
+| 15 | 6 | - | - |
 
 **Recent Trend:**
 
@@ -103,6 +104,7 @@ Recent decisions affecting current work:
 - [Phase 12]: Split the latest post-Phase-11 audit follow-up into one release-automation-path plan and one roadmap/state resynchronization plan so workflow cleanup and planning-state cleanup stay independently verifiable.
 - [Phase 13]: Keep the final post-Phase-12 cleanup documentation-only by splitting release-planning/state reference updates from the README CI platform correction.
 - [Phase 14]: Keep the final post-Phase-13 cleanup documentation/planning-only by isolating README config-behavior drift from the separate Phase 10-13 validation/process metadata reconciliation.
+- [Phase 15]: Track each newly approved maintenance improvement as its own plan so freshness optimization, diagnostics, stale-state cleanup, performance guardrails, config expansion, and async hook behavior can be executed independently.
 
 ### Roadmap Evolution
 
@@ -121,10 +123,16 @@ Recent decisions affecting current work:
 - Phase 13 added: final milestone-audit documentation drift follow-up planned.
 - Phase 14 added: final documentation and process cleanup follow-up planned.
 - Phase 14 completed: README config behavior and later maintenance-phase process metadata reconciled.
+- Phase 15 added: performance, diagnostics, and config/hook maintenance follow-up planned.
 
 ### Pending Todos
 
-- None.
+- Phase 15 plan 01: reuse stored lockfile metadata safely for hot-path freshness.
+- Phase 15 plan 02: add a diagnostic command (`status` or `doctor`).
+- Phase 15 plan 03: prune stale `.pupdate` entries when tracked targets disappear.
+- Phase 15 plan 04: add benchmarks and CI latency/performance guardrails.
+- Phase 15 plan 05: expand user config beyond `root_directories`.
+- Phase 15 plan 06: add an opt-in async/background hook mode.
 
 ### Blockers/Concerns
 
@@ -132,6 +140,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-30T02:35:00Z
-Stopped at: Completed Phase 14 cleanup and reran milestone audit
-Resume file: None.
+Last session: 2026-04-30T03:08:00Z
+Stopped at: Planned Phase 15 maintenance follow-up and synchronized roadmap/state
+Resume file: .planning/phases/15-performance-diagnostics-and-config-hook-follow-ups/15-01-PLAN.md
