@@ -10,11 +10,12 @@ import (
 type ecosystemOutcome struct {
 	StateKey         string
 	Succeeded        bool
+	RefreshMetadata  bool
 	Lockfiles        map[string]string
 	LockfileMetadata map[string]state.LockfileMetadata
 }
 
-func applySuccessfulOutcomes(now time.Time, current state.FileState, outcomes []ecosystemOutcome) state.FileState {
+func applyRunOutcomes(now time.Time, current state.FileState, outcomes []ecosystemOutcome) state.FileState {
 	next := state.FileState{
 		Version:    current.Version,
 		Ecosystems: make(map[string]state.EcosystemState, len(current.Ecosystems)),
@@ -27,9 +28,10 @@ func applySuccessfulOutcomes(now time.Time, current state.FileState, outcomes []
 	}
 
 	for _, outcome := range outcomes {
-		if !outcome.Succeeded {
+		if !outcome.Succeeded && !outcome.RefreshMetadata {
 			continue
 		}
+
 		existing := next.Ecosystems[outcome.StateKey]
 		lockfiles := existing.Lockfiles
 		lockfileMetadata := existing.LockfileMetadata
@@ -39,8 +41,12 @@ func applySuccessfulOutcomes(now time.Time, current state.FileState, outcomes []
 		if len(outcome.LockfileMetadata) > 0 {
 			lockfileMetadata = cloneLockfileMetadata(outcome.LockfileMetadata)
 		}
+		lastSuccessAt := existing.LastSuccessAt
+		if outcome.Succeeded {
+			lastSuccessAt = state.FormatRFC3339UTC(now)
+		}
 		next.Ecosystems[outcome.StateKey] = state.EcosystemState{
-			LastSuccessAt:    state.FormatRFC3339UTC(now),
+			LastSuccessAt:    lastSuccessAt,
 			Lockfiles:        lockfiles,
 			LockfileMetadata: lockfileMetadata,
 		}
@@ -49,19 +55,19 @@ func applySuccessfulOutcomes(now time.Time, current state.FileState, outcomes []
 	return next
 }
 
-func saveSuccessfulRunOutcomes(store state.Store, currentState state.FileState, outcomes []ecosystemOutcome) error {
-	hasSuccess := false
+func saveRunOutcomes(store state.Store, currentState state.FileState, outcomes []ecosystemOutcome) error {
+	hasPersistedChange := false
 	for _, outcome := range outcomes {
-		if outcome.Succeeded {
-			hasSuccess = true
+		if outcome.Succeeded || outcome.RefreshMetadata {
+			hasPersistedChange = true
 			break
 		}
 	}
-	if !hasSuccess {
+	if !hasPersistedChange {
 		return nil
 	}
 
-	updated := applySuccessfulOutcomes(time.Now().UTC(), currentState, outcomes)
+	updated := applyRunOutcomes(time.Now().UTC(), currentState, outcomes)
 	if err := store.Save(updated); err != nil {
 		return fmt.Errorf("failed to save state: %w", err)
 	}

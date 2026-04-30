@@ -68,7 +68,7 @@ Phases execute in numeric order: 1 → 1.1 → 1.2 → 2
 | 12. Release Automation and Planning State Follow-Ups | 2/2 | Complete    | 2026-04-30 |
 | 13. Final Milestone Audit Documentation Drift Follow-Ups | 2/2 | Complete    | 2026-04-30 |
 | 14. Final Documentation and Process Cleanup | 2/2 | Complete | 2026-04-30 |
-| 15. Performance, Diagnostics, and Config/Hook Follow-Ups | 0/6 | Planned | |
+| 15. Performance, Diagnostics, and Config/Hook Follow-Ups | 1/6 | In Progress | |
 
 ### Phase 2: implement other package managers from IDEA.md
 
@@ -234,7 +234,7 @@ Plans:
 **Plans:** 6 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — Reuse stored lockfile metadata to short-circuit hot-path freshness hashing where safe.
+- [x] 15-01-PLAN.md — Reuse stored lockfile metadata to short-circuit hot-path freshness hashing where safe.
 - [ ] 15-02-PLAN.md — Add a `pupdate status` or `pupdate doctor` diagnostic command.
 - [ ] 15-03-PLAN.md — Prune stale `.pupdate` entries when tracked ecosystems or directories disappear.
 - [ ] 15-04-PLAN.md — Add benchmarks and CI latency/performance guardrails.

@@ -256,7 +256,13 @@ func hashMatchedFiles(dir string, matchedFiles []string, previous state.Ecosyste
 			ModTimeUnixNano: info.ModTime().UTC().UnixNano(),
 			Mode:            info.Mode().String(),
 		}
+		enrichLockfileMetadata(info, &currentMetadata)
 		metadata[key] = currentMetadata
+
+		if canReuseStoredLockfileHash(currentMetadata, previous.LockfileMetadata[key], previous.Lockfiles[key]) {
+			lockfiles[key] = previous.Lockfiles[key]
+			continue
+		}
 
 		hash, err := hashFileFn(fullPath)
 		if err != nil {
@@ -267,6 +273,19 @@ func hashMatchedFiles(dir string, matchedFiles []string, previous state.Ecosyste
 	}
 
 	return lockfiles, metadata, nil
+}
+
+func canReuseStoredLockfileHash(current state.LockfileMetadata, previous state.LockfileMetadata, previousHash string) bool {
+	if previousHash == "" {
+		return false
+	}
+	if current.Size != previous.Size || current.ModTimeUnixNano != previous.ModTimeUnixNano || current.Mode != previous.Mode {
+		return false
+	}
+	if current.FileID == "" || current.ChangeTimeUnixNano == 0 {
+		return false
+	}
+	return current.FileID == previous.FileID && current.ChangeTimeUnixNano == previous.ChangeTimeUnixNano
 }
 
 func hashFile(path string) (string, error) {
