@@ -60,7 +60,7 @@ Phases execute in numeric order: 1 → 1.1 → 1.2 → 2
 | 8. Optional Audit Tech Debt Cleanup | 1/1 | Complete | 2026-04-08 |
 | 9. Post-v1 Hardening and Hermeticity | 6/6 | Complete | 2026-04-29 |
 | 10. Filesystem Case-Sensitivity Follow-Ups | 2/2 | Complete | 2026-04-30 |
-| 11. Kasetto and Freshness Correctness Follow-Ups | 1/3 | In Progress|  |
+| 11. Kasetto and Freshness Correctness Follow-Ups | 2/3 | In Progress|  |
 
 ### Phase 2: implement other package managers from IDEA.md
 
@@ -174,9 +174,9 @@ Plans:
 **Requirements**: None (maintenance hardening)
 **Depends on:** Phase 10
 **Gap Closure:** Captures the new post-Phase-10 audit follow-ups for Kasetto project scoping, Kasetto local-config execution, and unsafe metadata-only lockfile hash reuse.
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 11-01-PLAN.md — Make Kasetto execution project-scoped.
-- [ ] 11-02-PLAN.md — Align Kasetto detection and execution around explicit local configs.
+- [x] 11-02-PLAN.md — Align Kasetto detection and execution around explicit local configs.
 - [ ] 11-03-PLAN.md — Remove or replace metadata-only lockfile hash reuse.
