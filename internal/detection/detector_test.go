@@ -149,7 +149,7 @@ func TestDetectKasettoSignals(t *testing.T) {
 	}
 
 	kasetto := assertContainsEcosystem(t, results, EcosystemKasetto)
-	if !slices.Equal(kasetto.MatchedFiles, []string{"kasetto.lock", "kasetto.yaml"}) {
+	if !slices.Equal(kasetto.MatchedFiles, []string{"KASETTO.LOCK", "kasetto.yaml"}) {
 		t.Fatalf("unexpected kasetto matched files: %#v", kasetto.MatchedFiles)
 	}
 	if !slices.Equal(kasetto.Managers, []string{"kst"}) {
@@ -205,22 +205,48 @@ func TestDetectCaseInsensitiveCanonicalSignals(t *testing.T) {
 	}
 
 	node := assertContainsEcosystem(t, results, EcosystemNode)
-	assertHasFile(t, node.MatchedFiles, "bun.lock")
+	assertHasFile(t, node.MatchedFiles, "BUN.LOCK")
+	assertHasFile(t, node.MatchedFiles, "PACKAGE-LOCK.JSON")
 	if !slices.Equal(node.Managers, []string{"bun", "npm"}) {
 		t.Fatalf("expected bun/npm managers for node lockfiles, got %#v", node.Managers)
 	}
 
 	php := assertContainsEcosystem(t, results, EcosystemPHP)
-	assertHasFile(t, php.MatchedFiles, "composer.lock")
+	assertHasFile(t, php.MatchedFiles, "COMPOSER.LOCK")
 
 	goResult := assertContainsEcosystem(t, results, EcosystemGo)
-	assertHasFile(t, goResult.MatchedFiles, "go.mod")
+	assertHasFile(t, goResult.MatchedFiles, "GO.MOD")
 
 	rust := assertContainsEcosystem(t, results, EcosystemRust)
-	assertHasFile(t, rust.MatchedFiles, "Cargo.lock")
+	assertHasFile(t, rust.MatchedFiles, "CARGO.LOCK")
 
 	python := assertContainsEcosystem(t, results, EcosystemPython)
-	assertHasFile(t, python.MatchedFiles, "requirements.txt")
+	assertHasFile(t, python.MatchedFiles, "REQUIREMENTS.TXT")
+}
+
+func TestDetectPreservesMatchedFileCaseWhenCanonicalFileIsMissing(t *testing.T) {
+	dir := t.TempDir()
+	frontendDir := filepath.Join(dir, "frontend")
+	if err := os.MkdirAll(frontendDir, 0o755); err != nil {
+		t.Fatalf("mkdir frontend: %v", err)
+	}
+	writeFiles(t, dir, "BUN.LOCK")
+	writeFiles(t, frontendDir, "CARGO.LOCK")
+
+	results, err := Detect(dir)
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+
+	node := assertContainsEcosystem(t, results, EcosystemNode)
+	if !slices.Equal(node.MatchedFiles, []string{"BUN.LOCK"}) {
+		t.Fatalf("expected actual bun lockfile casing to be preserved, got %#v", node.MatchedFiles)
+	}
+
+	rust := assertContainsEcosystem(t, results, EcosystemRust)
+	if !slices.Equal(rust.MatchedFiles, []string{"frontend/CARGO.LOCK"}) {
+		t.Fatalf("expected actual rust lockfile casing to be preserved in subdirectory, got %#v", rust.MatchedFiles)
+	}
 }
 
 func TestDetectSkipsSymlinkSignals(t *testing.T) {
