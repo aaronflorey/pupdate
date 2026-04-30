@@ -276,6 +276,35 @@ func TestEvaluateRustCanonicalLockfileUsesLowercaseStateKey(t *testing.T) {
 	}
 }
 
+func TestEvaluateMixedCaseLockfileUsesActualMatchedPath(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "BUN.LOCK", "same")
+
+	current := state.Empty()
+	current.Ecosystems["node"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"bun.lock": hashText("same"),
+		},
+	}
+
+	results, err := Evaluate(
+		dir,
+		[]detection.DetectionResult{{
+			Ecosystem:    detection.EcosystemNode,
+			MatchedFiles: []string{"BUN.LOCK"},
+		}},
+		current,
+	)
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+
+	if results[0].Decision != DecisionSkip {
+		t.Fatalf("expected mixed-case lockfile to compare against lowercase state key, got %q", results[0].Decision)
+	}
+}
+
 func TestEvaluatePHPVendorDriftRunsWhenLockfileUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "composer.lock", "same")

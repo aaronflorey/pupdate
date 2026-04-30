@@ -158,8 +158,8 @@ Plans:
 **Requirements**: None (maintenance hardening)
 **Depends on:** Phase 9
 **Gap Closure:** Captures the remaining follow-up work for filesystem-aware `root_directories` matching and preserving actual on-disk matched lockfile paths through detection and freshness.
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 10-01-PLAN.md — Make `root_directories` matching filesystem-aware.
-- [ ] 10-02-PLAN.md — Preserve matched lockfile paths through detection and freshness.
+- [x] 10-02-PLAN.md — Preserve matched lockfile paths through detection and freshness.
