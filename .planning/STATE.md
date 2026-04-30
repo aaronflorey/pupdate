@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: complete
-stopped_at: Completed Phase 15 plan 06 async hook mode
-last_updated: "2026-04-30T07:05:00Z"
+status: in_progress
+stopped_at: Discussing Phase 16 verification backfill
+last_updated: "2026-04-30T08:00:00Z"
 last_activity: 2026-04-30
 progress:
-  total_phases: 15
+  total_phases: 16
   completed_phases: 15
   total_plans: 36
   completed_plans: 36
-  percent: 100
+  percent: 94
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Keep project dependencies up to date automatically on directory entry without slowing down shell navigation.
-**Current focus:** Phase 15 complete
+**Current focus:** Phase 16 planning
 
 ## Current Position
 
-Phase: 15
-Plan: complete
-Status: Phase 15 complete
+Phase: 16
+Plan: discussion
+Status: Phase 16 ready for planning
 Last activity: 2026-04-30
 
-Progress: [██████████] 100%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
@@ -131,6 +131,7 @@ Recent decisions affecting current work:
 - Phase 15 plan 04 completed: hot-path benchmarks and relative freshness latency guardrails added.
 - Phase 15 plan 05 completed: `quiet` and `allow_scripts` are now supported as config-backed run defaults with flag override precedence.
 - Phase 15 completed: async hook mode now ships as an explicit init-time opt-in with detached execution and overlap protection.
+- Phase 16 added: backfill the missing standalone Phase 4 verification artifact for hook visibility and lifecycle-script opt-in requirements.
 
 ### Pending Todos
 
@@ -142,6 +143,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-30T07:05:00Z
-Stopped at: Completed Phase 15 plan 06 async hook mode
-Resume file: .planning/phases/15-performance-diagnostics-and-config-hook-follow-ups/15-06-SUMMARY.md
+Last session: 2026-04-30T08:00:00Z
+Stopped at: Discussing Phase 16 verification backfill
+Resume file: .planning/phases/16-backfill-verification-for-hook-visibility-and-script-opt-in-phase-4/16-CONTEXT.md
