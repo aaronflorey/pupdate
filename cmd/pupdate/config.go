@@ -157,5 +157,5 @@ func normalizeDirectoryForComparison(path string) string {
 		return ""
 	}
 
-	return strings.ToLower(resolved)
+	return resolved
 }

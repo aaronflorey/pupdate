@@ -56,7 +56,7 @@ Phases execute in numeric order: 1 → 1.1 → 1.2 → 2
 | 6. Backfill Verification for Ecosystem Expansion (Phase 2) | 1/1 | Complete | 2026-04-08 |
 | 7. Backfill Verification for Release and Milestone Closeout (Phase 3) | 1/1 | Complete | 2026-04-08 |
 | 8. Optional Audit Tech Debt Cleanup | 1/1 | Complete | 2026-04-08 |
-| 9. Post-v1 Hardening and Hermeticity | 0/6 | Planned | - |
+| 9. Post-v1 Hardening and Hermeticity | 6/6 | Complete | 2026-04-29 |
 
 ### Phase 2: implement other package managers from IDEA.md
 
@@ -151,3 +151,15 @@ Plans:
 - [x] 09-04-PLAN.md — Reduce hot-path lockfile hashing cost.
 - [x] 09-05-PLAN.md — Harden state-file persistence with parent-directory fsync.
 - [x] 09-06-PLAN.md — Remove auto-create-on-run config behavior and treat missing config as defaults.
+
+### Phase 10: filesystem case-sensitivity follow-ups (inserted)
+
+**Goal:** Close the two remaining filesystem case-sensitivity audit findings without widening the maintenance scope beyond root matching and lockfile path preservation.
+**Requirements**: None (maintenance hardening)
+**Depends on:** Phase 9
+**Gap Closure:** Captures the remaining follow-up work for filesystem-aware `root_directories` matching and preserving actual on-disk matched lockfile paths through detection and freshness.
+**Plans:** 1/2 plans executed
+
+Plans:
+- [x] 10-01-PLAN.md — Make `root_directories` matching filesystem-aware.
+- [ ] 10-02-PLAN.md — Preserve matched lockfile paths through detection and freshness.

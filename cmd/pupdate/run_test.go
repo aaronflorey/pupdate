@@ -470,7 +470,7 @@ func TestRunAllowsTopLevelProjectInsideConfiguredRootDirectoriesWithHomeExpansio
 	}
 }
 
-func TestRunAllowsConfiguredRootDirectoriesCaseInsensitiveMatch(t *testing.T) {
+func TestRunSkipsConfiguredRootDirectoriesWithDifferentCase(t *testing.T) {
 	homeDir := t.TempDir()
 	projectDir := filepath.Join(homeDir, "src", "project")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
@@ -510,14 +510,8 @@ func TestRunAllowsConfiguredRootDirectoriesCaseInsensitiveMatch(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Fatalf("expected quiet run to avoid stdout, got %q", stdout.String())
 	}
-	if strings.Contains(stderr.String(), "outside configured root_directories") {
-		t.Fatalf("expected mixed-case configured root to allow project, got %q", stderr.String())
-	}
-	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts") {
-		t.Fatalf("expected install to run inside mixed-case configured root, got %q", stderr.String())
-	}
-	if !strings.Contains(stderr.String(), "pupdate: done npm") {
-		t.Fatalf("expected install completion inside mixed-case configured root, got %q", stderr.String())
+	if stderr.Len() != 0 {
+		t.Fatalf("expected quiet mixed-case configured root skip to stay silent, got %q", stderr.String())
 	}
 }
 
