@@ -171,7 +171,8 @@ func detectDirectory(dirPath string, relativeDir string) ([]DetectionResult, err
 			continue
 		}
 
-		signal, ok := detectSupportedSignal(filepath.Base(entry.Name()))
+		matchedName := filepath.Base(entry.Name())
+		signal, ok := detectSupportedSignal(matchedName)
 		if !ok {
 			continue
 		}
@@ -181,9 +182,21 @@ func detectDirectory(dirPath string, relativeDir string) ([]DetectionResult, err
 		if !fileSeen[ecosystem][name] {
 			fileSeen[ecosystem][name] = true
 			if relativeDir == "." {
-				filesByEcosystem[ecosystem] = append(filesByEcosystem[ecosystem], name)
+				filesByEcosystem[ecosystem] = append(filesByEcosystem[ecosystem], matchedName)
 			} else {
-				filesByEcosystem[ecosystem] = append(filesByEcosystem[ecosystem], filepath.ToSlash(filepath.Join(relativeDir, name)))
+				filesByEcosystem[ecosystem] = append(filesByEcosystem[ecosystem], filepath.ToSlash(filepath.Join(relativeDir, matchedName)))
+			}
+		} else if matchedName == name {
+			preferredPath := matchedName
+			if relativeDir != "." {
+				preferredPath = filepath.ToSlash(filepath.Join(relativeDir, matchedName))
+			}
+
+			for i, existing := range filesByEcosystem[ecosystem] {
+				if strings.EqualFold(filepath.Base(existing), name) {
+					filesByEcosystem[ecosystem][i] = preferredPath
+					break
+				}
 			}
 		}
 		if signal.manager != "" && !managerSeen[ecosystem][signal.manager] {
