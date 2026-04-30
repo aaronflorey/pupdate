@@ -70,7 +70,7 @@ Phases execute in numeric order: 1 → 1.1 → 1.2 → 2
 | 13. Final Milestone Audit Documentation Drift Follow-Ups | 2/2 | Complete    | 2026-04-30 |
 | 14. Final Documentation and Process Cleanup | 2/2 | Complete | 2026-04-30 |
 | 15. Performance, Diagnostics, and Config/Hook Follow-Ups | 6/6 | Complete | 2026-04-30 |
-| 16. Backfill Verification for Hook Visibility and Script Opt-In (Phase 4) | 0/0 | Planned | |
+| 16. Backfill Verification for Hook Visibility and Script Opt-In (Phase 4) | 0/1 | Planned | |
 
 ### Phase 2: implement other package managers from IDEA.md
 
@@ -249,4 +249,7 @@ Plans:
 **Requirements**: EXEC-03, STAT-01, MILE-01
 **Depends on:** Phase 15
 **Gap Closure:** Closes the milestone audit evidence gaps for the missing `04-VERIFICATION.md` mapping of Phase 4 requirements.
-**Plans:** 0 plans
+**Plans:** 1 plan
+
+Plans:
+- [ ] 16-01-PLAN.md — Add the missing Phase 4 verification artifact and close the remaining requirement traceability gap.
