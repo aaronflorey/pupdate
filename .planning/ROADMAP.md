@@ -25,6 +25,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 11: Kasetto and Freshness Correctness Follow-Ups** - Close the latest Kasetto execution scoping and freshness correctness audit findings. (completed 2026-04-30)
 - [x] **Phase 12: Release Automation and Planning State Follow-Ups** - Reconcile duplicate release workflows and resynchronize stale roadmap/state metadata after Phase 11 closeout. (completed 2026-04-30)
 - [x] **Phase 13: Final Milestone Audit Documentation Drift Follow-Ups** - Correct the remaining release-planning and CI-platform documentation drift after the Phase 12 workflow cleanup. (completed 2026-04-30)
+- [x] **Phase 14: Final Documentation and Process Cleanup** - Align README config behavior docs with current missing-config semantics and reconcile Phase 10-13 validation/process metadata drift. (completed 2026-04-30)
 
 ## Phase Details
 
@@ -65,6 +66,7 @@ Phases execute in numeric order: 1 → 1.1 → 1.2 → 2
 | 11. Kasetto and Freshness Correctness Follow-Ups | 3/3 | Complete    | 2026-04-30 |
 | 12. Release Automation and Planning State Follow-Ups | 2/2 | Complete    | 2026-04-30 |
 | 13. Final Milestone Audit Documentation Drift Follow-Ups | 2/2 | Complete    | 2026-04-30 |
+| 14. Final Documentation and Process Cleanup | 2/2 | Complete | 2026-04-30 |
 
 ### Phase 2: implement other package managers from IDEA.md
 
@@ -208,3 +210,15 @@ Plans:
 Plans:
 - [x] 13-01-PLAN.md — Update release-planning documentation and state text for the surviving `release.yaml` model.
 - [x] 13-02-PLAN.md — Correct the README CI platform claim to match `ci.yml`.
+
+### Phase 14: final documentation and process cleanup
+
+**Goal:** Close the remaining documentation and planning-process drift by aligning README config behavior with the current non-auto-creating config semantics and reconciling Phase 10-13 validation/process metadata with the planning artifacts that actually exist.
+**Requirements**: None (documentation/process maintenance)
+**Depends on:** Phase 13
+**Gap Closure:** Captures the remaining post-Phase-13 cleanup for stale README config behavior wording and stale validation/process metadata claims around completed Phases 10 to 13.
+**Plans:** 2 plans
+
+Plans:
+- [x] 14-01-PLAN.md — Update README config behavior docs for non-auto-creating missing-config defaults.
+- [x] 14-02-PLAN.md — Reconcile Phase 10-13 validation/process metadata with the actual planning artifacts.

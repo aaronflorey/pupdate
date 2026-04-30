@@ -127,7 +127,7 @@ func kasettoConfigPath(matchedFiles []string) string {
 	for _, matchedFile := range matchedFiles {
 		base := filepath.Base(matchedFile)
 		if strings.EqualFold(base, "kasetto.yaml") || strings.EqualFold(base, "kasetto.yml") {
-			return matchedFile
+			return base
 		}
 	}
 

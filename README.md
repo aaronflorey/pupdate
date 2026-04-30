@@ -5,9 +5,10 @@
 [![License](https://img.shields.io/github/license/aaronflorey/pupdate)](LICENSE)
 
 `pupdate` is a fast Go CLI that keeps project dependencies up to date when you
-enter a repository. It detects dependency ecosystems in the current directory and
-depth-1 subdirectories, runs the matching package manager when work is needed,
-and skips unnecessary installs when dependency files have not changed.
+enter a repository. It detects dependency ecosystems in the current directory,
+other depth-1 subdirectories, and direct children of `packages/`, runs the
+matching package manager when work is needed, and skips unnecessary installs
+when dependency files have not changed.
 
 It is built for shell-hook usage on `cd`, so the common path stays low-latency,
 safe by default, and easy to follow from concise stderr status output.
@@ -93,13 +94,16 @@ status when an update actually executes.
 | Python | `uv.lock` | `uv` | `uv sync --frozen` |
 | Python | `poetry.lock` | `poetry` | `poetry install --no-interaction --sync` |
 | Python | `requirements.txt` | `pip` | `pip install -r requirements.txt --disable-pip-version-check --no-input` |
-| Kasetto | `kasetto.lock`, `kasetto.yaml`, `kasetto.yml` | `kst` | `kst sync` |
+| Kasetto | `kasetto.lock`, `kasetto.yaml`, `kasetto.yml` | `kst` | `kst sync --project --config <local-config>` |
 | Go | `go.mod` | `go` | `go mod download` |
 | Rust | `cargo.lock` | `cargo` | `cargo fetch --locked` |
 | Git submodules | `.gitmodules` | `git` | `git submodule update --init --recursive` |
 
 Manager binaries are resolved from the current process `PATH`, which keeps
 `pupdate` compatible with tools like `nvm`, `asdf`, and `mise`.
+
+Kasetto installs only run when a local `kasetto.yaml` or `kasetto.yml` is
+detected. Lock-only Kasetto detections are skipped.
 
 ## Commands
 
@@ -122,7 +126,7 @@ User config:
 
 - `~/.config/pupdate/config.yaml`
 - `root_directories:` with one or more paths (for example `~/code`): only run when the current working directory is a direct child of one of those roots; `~` expands to the user's home directory
-- when missing, `pupdate run` and `pupdate config` create the config directory and write defaults (`root_directories: []`)
+- when missing, `pupdate run` and `pupdate config` use implicit defaults (`root_directories: []`) without creating the config directory or writing `config.yaml`
 
 ### `pupdate init`
 
@@ -135,7 +139,8 @@ Flags:
 ### `pupdate config`
 
 Prints the resolved user config path and active config values. If the config file
-is missing, it creates `config.yaml` with defaults first.
+is missing, it reports the missing path and the implicit default values without
+creating `config.yaml`.
 
 Output includes:
 
@@ -145,8 +150,8 @@ Output includes:
 
 ## How It Works
 
-1. `pupdate run` scans the current directory and depth-1 subdirectories for known
-   lockfiles and manifests.
+1. `pupdate run` scans the current directory, other depth-1 subdirectories, and
+   direct children of `packages/` for known lockfiles and manifests.
 2. It detects the matching ecosystem and package manager.
 3. It compares current file hashes against the local `.pupdate` state file using
    namespaced keys per ecosystem and directory.

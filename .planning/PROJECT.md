@@ -16,7 +16,7 @@ Keep project dependencies up to date automatically on directory entry without sl
 - [x] Run the appropriate install command for each detected manager, starting with composer and bun for MVP. (Validated in Phases 1-2)
 - [x] Skip work when dependency state is unchanged by storing a lockfile hash in `.pupdate` and re-running only on change or first run. (Validated in Phase 1)
 - [x] Respect `.pupignore` to disable automatic runs in a repository. (Validated in Phase 1)
-- [x] Provide a lightweight `run` command and an `init` command to set up shell hooks for bash and zsh. (Validated in Phase 1)
+- [x] Provide a lightweight `run` command and an `init` command to set up shell hooks for bash, zsh, and fish. (Validated in Phase 1)
 - [x] Keep hook-driven runs non-blocking while preserving visible status output and explicit lifecycle-script opt-in control. (Validated in Phase 4)
 - [x] Automate semver releases with Release Please + GoReleaser + GitHub Actions. (Validated in Phase 3)
 - [x] Complete milestone-level verification and planning artifact synchronization for v1 closeout. (Validated in Phases 3 and 7)
@@ -32,7 +32,7 @@ Keep project dependencies up to date automatically on directory entry without sl
 
 ## Context
 
-- v1.0 is complete with support for composer, bun, npm, pnpm, yarn, uv, poetry, pip, go mod, cargo, and git submodules.
+- v1.0 is complete with support for composer, bun, npm, pnpm, yarn, uv, poetry, pip, Kasetto, go mod, cargo, and git submodules.
 - State stored locally in `.pupdate` with lockfile hashes to avoid unnecessary installs.
 - Release automation is wired through Release Please, GitHub Actions, and GoReleaser for semver-tagged builds.
 - Open question: track vendor directory drift (e.g., `vendor/` for composer) in addition to lockfile hashes.
@@ -41,7 +41,7 @@ Keep project dependencies up to date automatically on directory entry without sl
 
 - **Performance**: `run` must be low-latency on `cd` — no heavy scans when nothing changed.
 - **Runtime detection**: package manager binaries must be resolved via current PATH for `nvm`, `asdf`, and `mise` compatibility.
-- **Shell compatibility**: v1 supports bash and zsh hook setup via `init`.
+- **Shell compatibility**: v1 supports bash, zsh, and fish hook setup via `init`.
 - **Safety**: auto-update behavior must be transparent and non-blocking with visible status/errors.
 - **Release automation**: use Release Please + GoReleaser + GitHub Actions.
 
@@ -71,4 +71,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-08 after v1.0 milestone completion*
+*Last updated: 2026-04-30 after Phase 14 documentation/process cleanup*
