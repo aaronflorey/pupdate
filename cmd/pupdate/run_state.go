@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"time"
 
+	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/state"
 )
 
@@ -15,12 +17,23 @@ type ecosystemOutcome struct {
 	LockfileMetadata map[string]state.LockfileMetadata
 }
 
-func applyRunOutcomes(now time.Time, current state.FileState, outcomes []ecosystemOutcome) state.FileState {
+func applyRunOutcomes(now time.Time, current state.FileState, activeResults []detection.DetectionResult, outcomes []ecosystemOutcome) state.FileState {
+	activeStateKeys := make(map[string]struct{}, len(activeResults))
+	for _, result := range activeResults {
+		activeStateKeys[result.StateKey()] = struct{}{}
+	}
+	for _, outcome := range outcomes {
+		activeStateKeys[outcome.StateKey] = struct{}{}
+	}
+
 	next := state.FileState{
 		Version:    current.Version,
-		Ecosystems: make(map[string]state.EcosystemState, len(current.Ecosystems)),
+		Ecosystems: make(map[string]state.EcosystemState, len(activeStateKeys)),
 	}
 	for key, value := range current.Ecosystems {
+		if _, ok := activeStateKeys[key]; !ok {
+			continue
+		}
 		next.Ecosystems[key] = value
 	}
 	if next.Version == 0 {
@@ -55,8 +68,22 @@ func applyRunOutcomes(now time.Time, current state.FileState, outcomes []ecosyst
 	return next
 }
 
-func saveRunOutcomes(store state.Store, currentState state.FileState, outcomes []ecosystemOutcome) error {
-	hasPersistedChange := false
+func saveRunOutcomes(store state.Store, currentState state.FileState, activeResults []detection.DetectionResult, outcomes []ecosystemOutcome) error {
+	activeStateKeys := make(map[string]struct{}, len(activeResults))
+	for _, result := range activeResults {
+		activeStateKeys[result.StateKey()] = struct{}{}
+	}
+
+	hasPersistedChange := len(currentState.Ecosystems) != len(activeStateKeys)
+	if !hasPersistedChange {
+		for key := range currentState.Ecosystems {
+			if _, ok := activeStateKeys[key]; !ok {
+				hasPersistedChange = true
+				break
+			}
+		}
+	}
+
 	for _, outcome := range outcomes {
 		if outcome.Succeeded || outcome.RefreshMetadata {
 			hasPersistedChange = true
@@ -67,7 +94,12 @@ func saveRunOutcomes(store state.Store, currentState state.FileState, outcomes [
 		return nil
 	}
 
-	updated := applyRunOutcomes(time.Now().UTC(), currentState, outcomes)
+	updated := applyRunOutcomes(time.Now().UTC(), currentState, activeResults, outcomes)
+	if maps.EqualFunc(currentState.Ecosystems, updated.Ecosystems, func(left state.EcosystemState, right state.EcosystemState) bool {
+		return maps.Equal(left.Lockfiles, right.Lockfiles) && maps.Equal(left.LockfileMetadata, right.LockfileMetadata) && left.LastSuccessAt == right.LastSuccessAt
+	}) && currentState.Version == updated.Version {
+		return nil
+	}
 	if err := store.Save(updated); err != nil {
 		return fmt.Errorf("failed to save state: %w", err)
 	}

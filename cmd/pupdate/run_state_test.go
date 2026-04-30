@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/state"
 )
 
@@ -18,7 +19,7 @@ func TestStateUpdatesOnlyOnSuccessOutcomes(t *testing.T) {
 		},
 	}
 
-	updated := applyRunOutcomes(now, current, []ecosystemOutcome{
+	updated := applyRunOutcomes(now, current, []detection.DetectionResult{{Ecosystem: detection.EcosystemNode}, {Ecosystem: detection.EcosystemPython}}, []ecosystemOutcome{
 		{StateKey: "node", Succeeded: true, Lockfiles: map[string]string{"bun.lock": "new"}, LockfileMetadata: map[string]state.LockfileMetadata{"bun.lock": {Size: 4}}},
 		{StateKey: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
 	})
@@ -47,7 +48,7 @@ func TestStateUpdatePreservesExistingMetadataWhenOutcomeDoesNotReplaceIt(t *test
 		},
 	}
 
-	updated := applyRunOutcomes(now, current, []ecosystemOutcome{{
+	updated := applyRunOutcomes(now, current, []detection.DetectionResult{{Ecosystem: detection.EcosystemNode}}, []ecosystemOutcome{{
 		StateKey:  "node",
 		Succeeded: true,
 		Lockfiles: map[string]string{"bun.lock": "new"},
@@ -67,7 +68,7 @@ func TestStateUpdateDoesNotTouchFailedEcosystem(t *testing.T) {
 		},
 	}
 
-	updated := applyRunOutcomes(now, current, []ecosystemOutcome{
+	updated := applyRunOutcomes(now, current, []detection.DetectionResult{{Ecosystem: detection.EcosystemGo}}, []ecosystemOutcome{
 		{StateKey: "go", Succeeded: false, Lockfiles: map[string]string{"go.mod": "new"}},
 	})
 
@@ -87,7 +88,7 @@ func TestStateUpdateNoSuccessNoMutation(t *testing.T) {
 		Ecosystems: map[string]state.EcosystemState{},
 	}
 
-	updated := applyRunOutcomes(now, current, []ecosystemOutcome{
+	updated := applyRunOutcomes(now, current, nil, []ecosystemOutcome{
 		{StateKey: "node", Succeeded: false, Lockfiles: map[string]string{"bun.lock": "new"}},
 		{StateKey: "python", Succeeded: false, Lockfiles: map[string]string{"requirements.txt": "new"}},
 	})
@@ -112,7 +113,7 @@ func TestStateMetadataRefreshPreservesLastSuccessTimestamp(t *testing.T) {
 		},
 	}
 
-	updated := applyRunOutcomes(now, current, []ecosystemOutcome{{
+	updated := applyRunOutcomes(now, current, []detection.DetectionResult{{Ecosystem: detection.EcosystemNode}}, []ecosystemOutcome{{
 		StateKey:        "node",
 		RefreshMetadata: true,
 		Lockfiles:       map[string]string{"bun.lock": "same"},
@@ -127,5 +128,41 @@ func TestStateMetadataRefreshPreservesLastSuccessTimestamp(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.LockfileMetadata, map[string]state.LockfileMetadata{"bun.lock": {Size: 3, FileID: "1:2", ChangeTimeUnixNano: 3}}) {
 		t.Fatalf("unexpected refreshed metadata: %#v", got.LockfileMetadata)
+	}
+}
+
+func TestStateUpdatePrunesUndetectedEcosystems(t *testing.T) {
+	now := time.Date(2026, 3, 2, 17, 0, 0, 0, time.UTC)
+	current := state.FileState{
+		Version: state.SchemaVersion,
+		Ecosystems: map[string]state.EcosystemState{
+			"node":          {LastSuccessAt: "2026-03-01T10:00:00Z", Lockfiles: map[string]string{"bun.lock": "same"}},
+			"node@frontend": {LastSuccessAt: "2026-03-01T11:00:00Z", Lockfiles: map[string]string{"frontend/package-lock.json": "stale"}},
+		},
+	}
+
+	updated := applyRunOutcomes(now, current, []detection.DetectionResult{{Ecosystem: detection.EcosystemNode}}, nil)
+
+	if _, ok := updated.Ecosystems["node@frontend"]; ok {
+		t.Fatalf("expected stale subdirectory ecosystem to be pruned, got %#v", updated.Ecosystems)
+	}
+	if _, ok := updated.Ecosystems["node"]; !ok {
+		t.Fatalf("expected active ecosystem to be retained, got %#v", updated.Ecosystems)
+	}
+}
+
+func TestStateUpdateRetainsActiveEcosystemWithoutPersistedOutcome(t *testing.T) {
+	now := time.Date(2026, 3, 2, 18, 0, 0, 0, time.UTC)
+	current := state.FileState{
+		Version: state.SchemaVersion,
+		Ecosystems: map[string]state.EcosystemState{
+			"node": {LastSuccessAt: "2026-03-01T10:00:00Z", Lockfiles: map[string]string{"bun.lock": "same"}},
+		},
+	}
+
+	updated := applyRunOutcomes(now, current, []detection.DetectionResult{{Ecosystem: detection.EcosystemNode}}, nil)
+
+	if !reflect.DeepEqual(updated.Ecosystems, current.Ecosystems) {
+		t.Fatalf("expected active ecosystem without outcome to remain unchanged, got %#v", updated.Ecosystems)
 	}
 }
