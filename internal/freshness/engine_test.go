@@ -126,7 +126,7 @@ func TestEvaluateEqualHashesSkips(t *testing.T) {
 	}
 }
 
-func TestEvaluateUnchangedMetadataReusesStoredHash(t *testing.T) {
+func TestEvaluateUnchangedMetadataStillRehashesLockfile(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "bun.lock", "same")
 	info, err := os.Stat(filepath.Join(dir, "bun.lock"))
@@ -135,8 +135,10 @@ func TestEvaluateUnchangedMetadataReusesStoredHash(t *testing.T) {
 	}
 
 	originalHashFile := hashFileFn
+	called := 0
 	hashFileFn = func(string) (string, error) {
-		return "", errors.New("hash should not be called")
+		called++
+		return hashText("same"), nil
 	}
 	t.Cleanup(func() {
 		hashFileFn = originalHashFile
@@ -163,6 +165,9 @@ func TestEvaluateUnchangedMetadataReusesStoredHash(t *testing.T) {
 	}}, current)
 	if err != nil {
 		t.Fatalf("Evaluate returned error: %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("expected lockfile hash to be recomputed even when metadata matches, got %d calls", called)
 	}
 	if results[0].Decision != DecisionSkip {
 		t.Fatalf("expected DecisionSkip, got %q", results[0].Decision)
@@ -206,6 +211,53 @@ func TestEvaluateChangedMetadataRehashesLockfile(t *testing.T) {
 	}
 	if results[0].Decision != DecisionUpdate {
 		t.Fatalf("expected DecisionUpdate, got %q", results[0].Decision)
+	}
+}
+
+func TestEvaluateSameMetadataDifferentContentTriggersUpdate(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bun.lock")
+	writeFile(t, dir, "bun.lock", "same")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat bun.lock: %v", err)
+	}
+
+	if err := os.WriteFile(path, []byte("diff"), 0o644); err != nil {
+		t.Fatalf("rewrite bun.lock: %v", err)
+	}
+	if err := os.Chmod(path, info.Mode()); err != nil {
+		t.Fatalf("chmod bun.lock: %v", err)
+	}
+	modTime := info.ModTime()
+	if err := os.Chtimes(path, modTime, modTime); err != nil {
+		t.Fatalf("chtimes bun.lock: %v", err)
+	}
+
+	current := state.Empty()
+	current.Ecosystems["node"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T14:00:00Z",
+		Lockfiles: map[string]string{
+			"bun.lock": hashText("same"),
+		},
+		LockfileMetadata: map[string]state.LockfileMetadata{
+			"bun.lock": {
+				Size:            info.Size(),
+				ModTimeUnixNano: info.ModTime().UTC().UnixNano(),
+				Mode:            info.Mode().String(),
+			},
+		},
+	}
+
+	results, err := Evaluate(dir, []detection.DetectionResult{{
+		Ecosystem:    detection.EcosystemNode,
+		MatchedFiles: []string{"bun.lock"},
+	}}, current)
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+	if results[0].Decision != DecisionUpdate {
+		t.Fatalf("expected DecisionUpdate when content changes without metadata drift, got %q", results[0].Decision)
 	}
 }
 
