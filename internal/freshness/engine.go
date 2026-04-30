@@ -258,11 +258,6 @@ func hashMatchedFiles(dir string, matchedFiles []string, previous state.Ecosyste
 		}
 		metadata[key] = currentMetadata
 
-		if previousHash, ok := previous.Lockfiles[key]; ok && previous.LockfileMetadata[key] == currentMetadata {
-			lockfiles[key] = previousHash
-			continue
-		}
-
 		hash, err := hashFileFn(fullPath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("hash matched file %q: %w", matchedFile, err)
