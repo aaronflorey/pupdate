@@ -80,10 +80,10 @@ func TestLaunchBackgroundHookStartsDetachedChild(t *testing.T) {
 
 	var startedExecutable string
 	var startedArgs []string
-	startBackgroundProcess = func(executable string, args []string, stderr io.Writer) error {
+	startBackgroundProcess = func(executable string, args []string, stderr io.Writer) (int, error) {
 		startedExecutable = executable
 		startedArgs = append([]string(nil), args...)
-		return nil
+		return 1234, nil
 	}
 
 	cmd := &cobra.Command{}
@@ -101,8 +101,46 @@ func TestLaunchBackgroundHookStartsDetachedChild(t *testing.T) {
 	if startedArgs[4] != filepath.Join(".", backgroundHookLockFileName) {
 		t.Fatalf("expected detached child lock file arg, got %#v", startedArgs)
 	}
-	if _, err := os.Stat(filepath.Join(dir, backgroundHookLockFileName)); err != nil {
-		t.Fatalf("expected background hook lock to be created, err=%v", err)
+	lock, _, err := readBackgroundHookLock(filepath.Join(dir, backgroundHookLockFileName))
+	if err != nil {
+		t.Fatalf("expected background hook lock to be readable, err=%v", err)
+	}
+	if lock.PID != 1234 {
+		t.Fatalf("expected background hook lock pid to match child pid, got %#v", lock)
+	}
+}
+
+func TestLaunchBackgroundHookPreservesNonQuietChildMode(t *testing.T) {
+	dir := t.TempDir()
+	withChdir(t, dir)
+
+	previousResolveExecutablePath := resolveExecutablePath
+	previousStartBackgroundProcess := startBackgroundProcess
+	t.Cleanup(func() {
+		resolveExecutablePath = previousResolveExecutablePath
+		startBackgroundProcess = previousStartBackgroundProcess
+	})
+
+	resolveExecutablePath = func() (string, error) {
+		return "/fake/bin/pupdate", nil
+	}
+
+	var startedArgs []string
+	startBackgroundProcess = func(executable string, args []string, stderr io.Writer) (int, error) {
+		startedArgs = append([]string(nil), args...)
+		return 4321, nil
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetErr(&bytes.Buffer{})
+
+	if err := launchBackgroundHook(cmd, false); err != nil {
+		t.Fatalf("launch background hook: %v", err)
+	}
+	for _, arg := range startedArgs {
+		if arg == "--quiet" {
+			t.Fatalf("expected non-quiet async hook to preserve child verbosity, got %#v", startedArgs)
+		}
 	}
 }
 
@@ -120,8 +158,8 @@ func TestLaunchBackgroundHookRemovesLockWhenStartFails(t *testing.T) {
 	resolveExecutablePath = func() (string, error) {
 		return "/fake/bin/pupdate", nil
 	}
-	startBackgroundProcess = func(string, []string, io.Writer) error {
-		return errors.New("boom")
+	startBackgroundProcess = func(string, []string, io.Writer) (int, error) {
+		return 0, errors.New("boom")
 	}
 
 	cmd := &cobra.Command{}
@@ -156,6 +194,49 @@ func TestClaimBackgroundHookLockTreatsOldLockAsStale(t *testing.T) {
 	}
 	if !claimed {
 		t.Fatal("expected stale lock to be replaced")
+	}
+}
+
+func TestClaimBackgroundHookLockKeepsRunningProcessLockActive(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, backgroundHookLockFileName)
+	old := time.Now().Add(-backgroundHookStaleAfter - time.Minute)
+	if err := writeBackgroundHookLock(lockPath, backgroundHookLock{ClaimedAtUnix: old.Unix(), PID: os.Getpid()}); err != nil {
+		t.Fatalf("write lock file: %v", err)
+	}
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatalf("touch lock file: %v", err)
+	}
+
+	claimed, err := claimBackgroundHookLock(lockPath, time.Now())
+	if err != nil {
+		t.Fatalf("claim lock: %v", err)
+	}
+	if claimed {
+		t.Fatal("expected running process lock to remain active")
+	}
+}
+
+func TestCurrentBackgroundHookStatusReportsRunningPidAsActive(t *testing.T) {
+	dir := t.TempDir()
+	old := time.Now().Add(-backgroundHookStaleAfter - time.Minute)
+	lockPath := filepath.Join(dir, backgroundHookLockFileName)
+	if err := writeBackgroundHookLock(lockPath, backgroundHookLock{ClaimedAtUnix: old.Unix(), PID: os.Getpid()}); err != nil {
+		t.Fatalf("write lock file: %v", err)
+	}
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatalf("touch lock file: %v", err)
+	}
+
+	gotPath, status, err := currentBackgroundHookStatus(dir, time.Now())
+	if err != nil {
+		t.Fatalf("current background hook status: %v", err)
+	}
+	if gotPath != lockPath {
+		t.Fatalf("expected lock path %q, got %q", lockPath, gotPath)
+	}
+	if status != "active" {
+		t.Fatalf("expected running pid lock to stay active, got %q", status)
 	}
 }
 

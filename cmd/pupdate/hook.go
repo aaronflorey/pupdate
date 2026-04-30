@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,11 +22,20 @@ const (
 var backgroundHookNow = time.Now
 var resolveExecutablePath = os.Executable
 var executeRunFn = executeRun
-var startBackgroundProcess = func(executable string, args []string, stderr io.Writer) error {
+
+type backgroundHookLock struct {
+	ClaimedAtUnix int64
+	PID           int
+}
+
+var startBackgroundProcess = func(executable string, args []string, stderr io.Writer) (int, error) {
 	cmd := exec.Command(executable, args...)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = stderr
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return 0, err
+	}
+	return cmd.Process.Pid, nil
 }
 
 func newHookCmd() *cobra.Command {
@@ -85,10 +95,18 @@ func launchBackgroundHook(cmd *cobra.Command, quiet bool) error {
 		return fmt.Errorf("failed to resolve current executable: %w", err)
 	}
 
-	args := []string{"hook", "--quiet", "--child", "--lock-file", lockPath}
-	if err := startBackgroundProcess(executable, args, cmd.ErrOrStderr()); err != nil {
+	args := []string{"hook", "--child", "--lock-file", lockPath}
+	if quiet {
+		args = []string{"hook", "--quiet", "--child", "--lock-file", lockPath}
+	}
+	pid, err := startBackgroundProcess(executable, args, cmd.ErrOrStderr())
+	if err != nil {
 		removeBackgroundHookLock(lockPath)
 		return fmt.Errorf("failed to start background hook: %w", err)
+	}
+	if err := writeBackgroundHookLock(lockPath, backgroundHookLock{ClaimedAtUnix: backgroundHookNow().Unix(), PID: pid}); err != nil {
+		removeBackgroundHookLock(lockPath)
+		return err
 	}
 
 	return nil
@@ -102,8 +120,7 @@ func claimBackgroundHookLock(path string, now time.Time) (bool, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err == nil {
-			content := strconv.FormatInt(now.Unix(), 10) + "\n"
-			if _, writeErr := file.WriteString(content); writeErr != nil {
+			if _, writeErr := file.WriteString(formatBackgroundHookLock(backgroundHookLock{ClaimedAtUnix: now.Unix()})); writeErr != nil {
 				file.Close()
 				removeBackgroundHookLock(path)
 				return false, fmt.Errorf("failed to write background hook lock %s: %w", path, writeErr)
@@ -134,28 +151,97 @@ func claimBackgroundHookLock(path string, now time.Time) (bool, error) {
 }
 
 func backgroundHookLockIsStale(path string, now time.Time) (bool, error) {
-	info, err := os.Stat(path)
+	lock, info, err := readBackgroundHookLock(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return true, nil
+		return false, err
+	}
+	if info == nil {
+		return true, nil
+	}
+
+	if lock.PID > 0 {
+		running, runErr := backgroundHookProcessRunning(lock.PID)
+		if runErr != nil {
+			return false, runErr
 		}
-		return false, fmt.Errorf("failed to stat background hook lock %s: %w", path, err)
+		if running {
+			return false, nil
+		}
+		return true, nil
 	}
 
 	if now.Sub(info.ModTime()) > backgroundHookStaleAfter {
 		return true, nil
 	}
 
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return false, fmt.Errorf("failed to read background hook lock %s: %w", path, err)
-	}
-
-	if strings.TrimSpace(string(raw)) == "" {
+	if info.Size() == 0 {
 		return true, nil
 	}
 
 	return false, nil
+}
+
+func writeBackgroundHookLock(path string, lock backgroundHookLock) error {
+	if err := os.WriteFile(path, []byte(formatBackgroundHookLock(lock)), 0o600); err != nil {
+		return fmt.Errorf("failed to write background hook lock %s: %w", path, err)
+	}
+	return nil
+}
+
+func formatBackgroundHookLock(lock backgroundHookLock) string {
+	parts := []string{strconv.FormatInt(lock.ClaimedAtUnix, 10)}
+	if lock.PID > 0 {
+		parts = append(parts, fmt.Sprintf("pid=%d", lock.PID))
+	}
+	return strings.Join(parts, "\n") + "\n"
+}
+
+func readBackgroundHookLock(path string) (backgroundHookLock, os.FileInfo, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return backgroundHookLock{}, nil, nil
+		}
+		return backgroundHookLock{}, nil, fmt.Errorf("failed to stat background hook lock %s: %w", path, err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return backgroundHookLock{}, nil, fmt.Errorf("failed to read background hook lock %s: %w", path, err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	lock := backgroundHookLock{}
+	if len(lines) > 0 && strings.TrimSpace(lines[0]) != "" {
+		claimedAt, parseErr := strconv.ParseInt(strings.TrimSpace(lines[0]), 10, 64)
+		if parseErr == nil {
+			lock.ClaimedAtUnix = claimedAt
+		}
+	}
+	for _, line := range lines[1:] {
+		if after, ok := strings.CutPrefix(strings.TrimSpace(line), "pid="); ok {
+			pid, parseErr := strconv.Atoi(after)
+			if parseErr == nil {
+				lock.PID = pid
+			}
+		}
+	}
+
+	return lock, info, nil
+}
+
+func backgroundHookProcessRunning(pid int) (bool, error) {
+	if pid <= 0 {
+		return false, nil
+	}
+	err := syscall.Kill(pid, 0)
+	if err == nil || err == syscall.EPERM {
+		return true, nil
+	}
+	if err == syscall.ESRCH {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to probe background hook process %d: %w", pid, err)
 }
 
 func removeBackgroundHookLock(path string) {
@@ -167,15 +253,26 @@ func removeBackgroundHookLock(path string) {
 
 func currentBackgroundHookStatus(root string, now time.Time) (string, string, error) {
 	lockPath := backgroundHookLockPath(root)
-	info, err := os.Stat(lockPath)
+	lock, info, err := readBackgroundHookLock(lockPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return lockPath, "idle", nil
-		}
-		return lockPath, "", fmt.Errorf("failed to stat background hook lock %s: %w", lockPath, err)
+		return lockPath, "", err
+	}
+	if info == nil {
+		return lockPath, "idle", nil
 	}
 
-	if now.Sub(info.ModTime()) > backgroundHookStaleAfter {
+	if lock.PID > 0 {
+		running, runErr := backgroundHookProcessRunning(lock.PID)
+		if runErr != nil {
+			return lockPath, "", runErr
+		}
+		if running {
+			return lockPath, "active", nil
+		}
+		return lockPath, "stale", nil
+	}
+
+	if now.Sub(info.ModTime()) > backgroundHookStaleAfter || info.Size() == 0 {
 		return lockPath, "stale", nil
 	}
 
