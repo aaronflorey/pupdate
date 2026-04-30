@@ -17,6 +17,7 @@ type statusSnapshot struct {
 	WorkingDirectory string
 	RunStatus        string
 	RunReason        string
+	RunOptions       runOptions
 	ConfigPath       string
 	ConfigExists     bool
 	RawConfig        userConfig
@@ -90,6 +91,7 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 
 	snapshot := statusSnapshot{
 		WorkingDirectory: workingDirectory,
+		RunOptions:       resolveRunOptions(nil, resolvedConfig, false, false),
 		ConfigPath:       configPath,
 		ConfigExists:     configExists,
 		RawConfig:        rawConfig,
@@ -99,7 +101,7 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 		StateWarnings:    warnings,
 	}
 
-	repoStatus, repoReason, err := statusPrecheck()
+	repoStatus, repoReason, err := statusPrecheck(resolvedConfig)
 	if err != nil {
 		return statusSnapshot{}, err
 	}
@@ -126,7 +128,7 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 		if !ok {
 			continue
 		}
-		targets = append(targets, buildStatusTarget(result, decision))
+		targets = append(targets, buildStatusTarget(result, decision, snapshot.RunOptions.AllowScripts))
 	}
 
 	snapshot.Targets = targets
@@ -165,7 +167,7 @@ func pathExists(path string) (bool, error) {
 	return false, err
 }
 
-func statusPrecheck() (string, string, error) {
+func statusPrecheck(config userConfig) (string, string, error) {
 	inHomeDir, err := isHomeDirectory()
 	if err != nil {
 		return "", "", err
@@ -174,7 +176,7 @@ func statusPrecheck() (string, string, error) {
 		return "skip", "current directory is $HOME", nil
 	}
 
-	outsideConfiguredRoots, err := isOutsideConfiguredRootDirectories()
+	outsideConfiguredRoots, err := isOutsideConfiguredRootDirectories(config)
 	if err != nil {
 		return "", "", err
 	}
@@ -193,7 +195,7 @@ func statusPrecheck() (string, string, error) {
 	return "", "", nil
 }
 
-func buildStatusTarget(result detection.DetectionResult, decision freshness.EcosystemDecision) statusTarget {
+func buildStatusTarget(result detection.DetectionResult, decision freshness.EcosystemDecision, allowScripts bool) statusTarget {
 	target := statusTarget{
 		Name:            resultTarget(result),
 		Directory:       result.Directory,
@@ -210,7 +212,7 @@ func buildStatusTarget(result detection.DetectionResult, decision freshness.Ecos
 		return target
 	}
 
-	plan, ok, reason := selectManagerPlan(result, false)
+	plan, ok, reason := selectManagerPlan(result, allowScripts)
 	if !ok {
 		target.InstallStatus = "blocked"
 		target.InstallReason = reason
@@ -297,7 +299,19 @@ func writeStatusSnapshot(w io.Writer, snapshot statusSnapshot) error {
 	if _, err := fmt.Fprintf(w, "root_directories: %s\n", displayConfigValues(snapshot.RawConfig.RootDirectories)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "root_directories_resolved: %s\n\n", displayConfigValues(snapshot.ResolvedConfig.RootDirectories)); err != nil {
+	if _, err := fmt.Fprintf(w, "root_directories_resolved: %s\n", displayConfigValues(snapshot.ResolvedConfig.RootDirectories)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "quiet: %s\n", displayOptionalBool(snapshot.RawConfig.Quiet)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "allow_scripts: %s\n", displayOptionalBool(snapshot.RawConfig.AllowScripts)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "effective_quiet: %t\n", snapshot.RunOptions.Quiet); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "effective_allow_scripts: %t\n\n", snapshot.RunOptions.AllowScripts); err != nil {
 		return err
 	}
 

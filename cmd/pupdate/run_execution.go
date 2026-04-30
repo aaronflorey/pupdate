@@ -30,7 +30,14 @@ var currentUserHomeDir = func() (string, error) {
 	return current.HomeDir, nil
 }
 
-func executeRun(cmd *cobra.Command, options runOptions) error {
+func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool) error {
+	config, err := loadUserConfig()
+	if err != nil {
+		return err
+	}
+
+	options := resolveRunOptions(cmd, config, quietFlag, allowScriptsFlag)
+
 	inHomeDir, err := isHomeDirectory()
 	if err != nil {
 		return err
@@ -40,7 +47,7 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 		return nil
 	}
 
-	restricted, err := isOutsideConfiguredRootDirectories()
+	restricted, err := isOutsideConfiguredRootDirectories(config)
 	if err != nil {
 		return err
 	}
@@ -72,11 +79,7 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 	return saveRunOutcomes(execution.Store, execution.CurrentState, execution.Results, outcomes)
 }
 
-func isOutsideConfiguredRootDirectories() (bool, error) {
-	config, err := loadUserConfig()
-	if err != nil {
-		return false, err
-	}
+func isOutsideConfiguredRootDirectories(config userConfig) (bool, error) {
 	if len(config.RootDirectories) == 0 {
 		return false, nil
 	}
@@ -93,6 +96,23 @@ func isOutsideConfiguredRootDirectories() (bool, error) {
 	}
 
 	return true, nil
+}
+
+func resolveRunOptions(cmd *cobra.Command, config userConfig, quietFlag bool, allowScriptsFlag bool) runOptions {
+	options := runOptions{}
+	if config.Quiet != nil {
+		options.Quiet = *config.Quiet
+	}
+	if config.AllowScripts != nil {
+		options.AllowScripts = *config.AllowScripts
+	}
+	if cmd != nil && cmd.Flags().Changed("quiet") {
+		options.Quiet = quietFlag
+	}
+	if cmd != nil && cmd.Flags().Changed("allow-scripts") {
+		options.AllowScripts = allowScriptsFlag
+	}
+	return options
 }
 
 func prepareRunExecution(cmd *cobra.Command, options runOptions) (runExecution, error) {

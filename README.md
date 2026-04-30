@@ -127,6 +127,8 @@ User config:
 
 - `~/.config/pupdate/config.yaml`
 - `root_directories:` with one or more paths (for example `~/code`): only run when the current working directory is a direct child of one of those roots; `~` expands to the user's home directory
+- `quiet: true|false`: set the default `run` quiet mode without needing `--quiet` in shell aliases or wrappers
+- `allow_scripts: true|false`: set the default lifecycle-script policy for `run`; explicit command flags still win
 - when missing, `pupdate run` and `pupdate config` use implicit defaults (`root_directories: []`) without creating the config directory or writing `config.yaml`
 
 ### `pupdate init`
@@ -148,6 +150,7 @@ Output includes:
 - whether the config file currently exists
 - the configured `root_directories` values from the file
 - the resolved `root_directories` values after `~` expansion and path normalization
+- the configured `quiet` and `allow_scripts` values when set
 
 ### `pupdate status`
 
@@ -159,6 +162,7 @@ Output includes:
 
 - overall `run_status` and `run_reason` for the current directory
 - config path, existence, and resolved `root_directories`
+- configured and effective `quiet` / `allow_scripts` run defaults
 - `.pupdate` path, existence, and any state decode warnings
 - one section per detected target with matched files, freshness result, install readiness, and resolved manager path
 

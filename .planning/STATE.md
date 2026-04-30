@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-stopped_at: Completed Phase 15 plan 04 performance guardrails
-last_updated: "2026-04-30T06:00:00Z"
+stopped_at: Completed Phase 15 plan 05 config expansion
+last_updated: "2026-04-30T06:35:00Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 15
   completed_phases: 14
   total_plans: 36
-  completed_plans: 34
-  percent: 94
+  completed_plans: 35
+  percent: 97
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Keep project dependencies up to date automatically on directory entry without slowing down shell navigation.
-**Current focus:** Phase 15 plan 05 config expansion
+**Current focus:** Phase 15 plan 06 async hook mode
 
 ## Current Position
 
 Phase: 15
-Plan: 05
-Status: Phase 15 plan 04 complete; config expansion next
+Plan: 06
+Status: Phase 15 plan 05 complete; async hook mode next
 Last activity: 2026-04-30
 
 Progress: [█████████░] 89%
@@ -128,10 +128,10 @@ Recent decisions affecting current work:
 - Phase 15 added: performance, diagnostics, and config/hook maintenance follow-up planned.
 - Phase 15 plan 03 completed: stale `.pupdate` target entries are pruned without mutating still-active state.
 - Phase 15 plan 04 completed: hot-path benchmarks and relative freshness latency guardrails added.
+- Phase 15 plan 05 completed: `quiet` and `allow_scripts` are now supported as config-backed run defaults with flag override precedence.
 
 ### Pending Todos
 
-- Phase 15 plan 05: expand user config beyond `root_directories`.
 - Phase 15 plan 06: add an opt-in async/background hook mode.
 
 ### Blockers/Concerns
@@ -140,6 +140,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-30T06:00:00Z
-Stopped at: Completed Phase 15 plan 04 performance guardrails
-Resume file: .planning/phases/15-performance-diagnostics-and-config-hook-follow-ups/15-05-PLAN.md
+Last session: 2026-04-30T06:35:00Z
+Stopped at: Completed Phase 15 plan 05 config expansion
+Resume file: .planning/phases/15-performance-diagnostics-and-config-hook-follow-ups/15-06-PLAN.md

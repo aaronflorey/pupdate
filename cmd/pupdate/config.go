@@ -15,6 +15,8 @@ const configFileName = "config.yaml"
 
 type userConfig struct {
 	RootDirectories []string `yaml:"root_directories"`
+	Quiet           *bool    `yaml:"quiet"`
+	AllowScripts    *bool    `yaml:"allow_scripts"`
 }
 
 var userConfigDir = os.UserConfigDir
