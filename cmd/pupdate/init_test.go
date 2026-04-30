@@ -23,8 +23,11 @@ func TestInitBashSnippetIncludesHookAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "PROMPT_COMMAND") {
 		t.Fatalf("expected bash snippet to reference PROMPT_COMMAND, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate run --quiet") {
-		t.Fatalf("expected bash snippet to invoke quiet run, got %q", out)
+	if !strings.Contains(out, "pupdate hook --quiet") {
+		t.Fatalf("expected bash snippet to invoke quiet hook, got %q", out)
+	}
+	if strings.Contains(out, "--async") {
+		t.Fatalf("expected default bash snippet to stay foreground, got %q", out)
 	}
 	if !strings.Contains(out, "[ \"$PWD\" != \"$HOME\" ]") {
 		t.Fatalf("expected bash snippet to skip $HOME, got %q", out)
@@ -51,8 +54,11 @@ func TestInitZshSnippetIncludesHooksAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "add-zsh-hook") {
 		t.Fatalf("expected zsh snippet to add zsh hooks, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate run --quiet") {
-		t.Fatalf("expected zsh snippet to invoke quiet run, got %q", out)
+	if !strings.Contains(out, "pupdate hook --quiet") {
+		t.Fatalf("expected zsh snippet to invoke quiet hook, got %q", out)
+	}
+	if strings.Contains(out, "--async") {
+		t.Fatalf("expected default zsh snippet to stay foreground, got %q", out)
 	}
 	if !strings.Contains(out, "[ \"$PWD\" != \"$HOME\" ]") {
 		t.Fatalf("expected zsh snippet to skip $HOME, got %q", out)
@@ -79,14 +85,36 @@ func TestInitFishSnippetIncludesHookAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "--on-variable PWD") {
 		t.Fatalf("expected fish snippet to use PWD variable hook, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate run --quiet") {
-		t.Fatalf("expected fish snippet to invoke quiet run, got %q", out)
+	if !strings.Contains(out, "pupdate hook --quiet") {
+		t.Fatalf("expected fish snippet to invoke quiet hook, got %q", out)
+	}
+	if strings.Contains(out, "--async") {
+		t.Fatalf("expected default fish snippet to stay foreground, got %q", out)
 	}
 	if !strings.Contains(out, "test \"$PWD\" != \"$HOME\"") {
 		t.Fatalf("expected fish snippet to skip $HOME, got %q", out)
 	}
 	if strings.Contains(out, "2>/dev/null") {
 		t.Fatalf("expected fish snippet to preserve stderr status output, got %q", out)
+	}
+}
+
+func TestInitAsyncModeUsesBackgroundHook(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"init", "--shell", "bash", "--mode", "async"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "pupdate hook --quiet --async") {
+		t.Fatalf("expected async init mode to launch background hook, got %q", out)
 	}
 }
 
@@ -127,8 +155,8 @@ func TestInitDefaultsToFishWhenShellEnvIsFish(t *testing.T) {
 	if !strings.Contains(out, "--on-variable PWD") {
 		t.Fatalf("expected default snippet to be fish when SHELL is fish, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate run --quiet") {
-		t.Fatalf("expected fish default snippet to invoke quiet run, got %q", out)
+	if !strings.Contains(out, "pupdate hook --quiet") {
+		t.Fatalf("expected fish default snippet to invoke quiet hook, got %q", out)
 	}
 }
 
@@ -161,9 +189,24 @@ func TestInitDefaultsToBashWhenShellEnvIsEmptyOrUnknown(t *testing.T) {
 			if !strings.Contains(out, "PROMPT_COMMAND") {
 				t.Fatalf("expected default snippet to be bash, got %q", out)
 			}
-			if !strings.Contains(out, "pupdate run --quiet") {
-				t.Fatalf("expected bash default snippet to invoke quiet run, got %q", out)
+			if !strings.Contains(out, "pupdate hook --quiet") {
+				t.Fatalf("expected bash default snippet to invoke quiet hook, got %q", out)
 			}
 		})
+	}
+}
+
+func TestInitRejectsUnsupportedHookMode(t *testing.T) {
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"init", "--mode", "daemon"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected init command to fail for unsupported hook mode")
+	}
+	if !strings.Contains(err.Error(), "supported modes: foreground, async") {
+		t.Fatalf("expected actionable hook-mode error, got %q", err.Error())
 	}
 }

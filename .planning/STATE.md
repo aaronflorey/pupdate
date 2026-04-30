@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: active
-stopped_at: Completed Phase 15 plan 05 config expansion
-last_updated: "2026-04-30T06:35:00Z"
+status: complete
+stopped_at: Completed Phase 15 plan 06 async hook mode
+last_updated: "2026-04-30T07:05:00Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 15
-  completed_phases: 14
+  completed_phases: 15
   total_plans: 36
-  completed_plans: 35
-  percent: 97
+  completed_plans: 36
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Keep project dependencies up to date automatically on directory entry without slowing down shell navigation.
-**Current focus:** Phase 15 plan 06 async hook mode
+**Current focus:** Phase 15 complete
 
 ## Current Position
 
 Phase: 15
-Plan: 06
-Status: Phase 15 plan 05 complete; async hook mode next
+Plan: complete
+Status: Phase 15 complete
 Last activity: 2026-04-30
 
-Progress: [█████████░] 89%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -107,6 +107,7 @@ Recent decisions affecting current work:
 - [Phase 15]: Track each newly approved maintenance improvement as its own plan so freshness optimization, diagnostics, stale-state cleanup, performance guardrails, config expansion, and async hook behavior can be executed independently.
 - [Phase 15]: Use a read-only `status` command, not `doctor`, and drive it from the real run/config/freshness pipeline so troubleshooting output stays behaviorally accurate.
 - [Phase 15]: Protect hot-path freshness performance with a relative stored-hash-versus-rehash guardrail and capture targeted detection/freshness benchmarks in CI logs instead of enforcing flaky absolute runtime budgets.
+- [Phase 15]: Make async hook execution an explicit `init --mode async` opt-in backed by a hidden hook command and a repo-local overlap lock instead of changing the default foreground shell contract.
 
 ### Roadmap Evolution
 
@@ -129,10 +130,11 @@ Recent decisions affecting current work:
 - Phase 15 plan 03 completed: stale `.pupdate` target entries are pruned without mutating still-active state.
 - Phase 15 plan 04 completed: hot-path benchmarks and relative freshness latency guardrails added.
 - Phase 15 plan 05 completed: `quiet` and `allow_scripts` are now supported as config-backed run defaults with flag override precedence.
+- Phase 15 completed: async hook mode now ships as an explicit init-time opt-in with detached execution and overlap protection.
 
 ### Pending Todos
 
-- Phase 15 plan 06: add an opt-in async/background hook mode.
+- None.
 
 ### Blockers/Concerns
 
@@ -140,6 +142,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-30T06:35:00Z
-Stopped at: Completed Phase 15 plan 05 config expansion
-Resume file: .planning/phases/15-performance-diagnostics-and-config-hook-follow-ups/15-06-PLAN.md
+Last session: 2026-04-30T07:05:00Z
+Stopped at: Completed Phase 15 plan 06 async hook mode
+Resume file: .planning/phases/15-performance-diagnostics-and-config-hook-follow-ups/15-06-SUMMARY.md
