@@ -89,12 +89,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DET-03 | Phase 5 | Complete |
 | EXEC-01 | Phase 5 | Complete |
 | EXEC-02 | Phase 5 | Complete |
-| EXEC-03 | Phase 4 | Complete |
+| EXEC-03 | Phase 16 | Pending |
 | STATE-01 | Phase 5 | Complete |
 | STATE-02 | Phase 5 | Complete |
 | SHELL-01 | Phase 5 | Complete |
 | SHELL-02 | Phase 5 | Complete |
-| STAT-01 | Phase 4 | Complete |
+| STAT-01 | Phase 16 | Pending |
 | ECO-01 | Phase 5 | Complete |
 | ECO-02 | Phase 6 | Complete |
 | ECO-03 | Phase 6 | Complete |
@@ -103,14 +103,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REL-01 | Phase 7 | Complete |
 | REL-02 | Phase 7 | Complete |
 | REL-03 | Phase 7 | Complete |
-| MILE-01 | Phase 4 | Complete |
+| MILE-01 | Phase 16 | Pending |
 | MILE-02 | Phase 7 | Complete |
 
 **Coverage:**
 - Requirements in traceability: 21 total
 - Mapped to phases: 21
-- Pending: 0
+- Pending: 3
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-04-08 after v1.0 milestone completion*
+*Last updated: 2026-04-30 after milestone gap closure planning*
