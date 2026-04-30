@@ -69,7 +69,7 @@ func executeRun(cmd *cobra.Command, options runOptions) error {
 	}
 
 	outcomes := executeRunResults(cmd, execution.Results, execution.DecisionByEcosystem, options, installDisabled)
-	return saveRunOutcomes(execution.Store, execution.CurrentState, outcomes)
+	return saveRunOutcomes(execution.Store, execution.CurrentState, execution.Results, outcomes)
 }
 
 func isOutsideConfiguredRootDirectories() (bool, error) {

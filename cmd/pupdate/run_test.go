@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -906,6 +907,55 @@ func TestRunUpdatesPackagesChildAndSavesPackagesNamespacedState(t *testing.T) {
 	}
 	if _, ok := entry.Lockfiles["packages/web/package-lock.json"]; !ok {
 		t.Fatalf("expected namespaced packages state to include child lockfile hash, got %#v", entry.Lockfiles)
+	}
+}
+
+func TestRunPrunesUndetectedSubdirectoryStateWithoutChangingActiveTargets(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock")
+	withChdir(t, dir)
+	disableInstall(t)
+
+	initial := state.Empty()
+	initial.Ecosystems["node"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T12:00:00Z",
+		Lockfiles: map[string]string{
+			"bun.lock": hashFileForTest(t, filepath.Join(dir, "bun.lock")),
+		},
+	}
+	initial.Ecosystems["node@frontend"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T13:00:00Z",
+		Lockfiles: map[string]string{
+			"frontend/package-lock.json": "stale",
+		},
+	}
+	if err := state.NewStore(dir).Save(initial); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	var stderr bytes.Buffer
+	cmd := newRunCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run command failed: %v", err)
+	}
+
+	stored, warnings, err := state.NewStore(dir).Load()
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected state warnings: %v", warnings)
+	}
+	if _, ok := stored.Ecosystems["node@frontend"]; ok {
+		t.Fatalf("expected stale subdirectory state to be pruned, got %#v", stored.Ecosystems)
+	}
+	if stored.Ecosystems["node"].LastSuccessAt != initial.Ecosystems["node"].LastSuccessAt {
+		t.Fatalf("expected active root ecosystem timestamp to remain unchanged, got %#v", stored.Ecosystems["node"])
+	}
+	if !reflect.DeepEqual(stored.Ecosystems["node"].Lockfiles, initial.Ecosystems["node"].Lockfiles) {
+		t.Fatalf("expected active root ecosystem lockfile hashes to remain unchanged, got %#v", stored.Ecosystems["node"].Lockfiles)
 	}
 }
 
