@@ -33,6 +33,7 @@ Keep project dependencies up to date automatically on directory entry without sl
 ## Context
 
 - v1.0 is complete with support for composer, bun, npm, pnpm, yarn, uv, poetry, pip, Kasetto, go mod, cargo, and git submodules.
+- Phase 16 closed the remaining milestone audit traceability gap by backfilling standalone Phase 4 verification evidence for hook visibility and lifecycle-script opt-in behavior.
 - State stored locally in `.pupdate` with lockfile hashes to avoid unnecessary installs.
 - Release automation is wired through Release Please, GitHub Actions, and GoReleaser for semver-tagged builds.
 - Open question: track vendor directory drift (e.g., `vendor/` for composer) in addition to lockfile hashes.
@@ -71,4 +72,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-30 after Phase 14 documentation/process cleanup*
+*Last updated: 2026-04-30 after Phase 16 verification backfill and milestone closeout audit refresh*

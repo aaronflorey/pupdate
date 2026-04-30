@@ -52,7 +52,7 @@ Deferred to future release. Tracked but not in current roadmap.
 
 - [ ] **REL-01**: Configure Release Please for semver release PR generation.
 - [ ] **REL-02**: Add GitHub Actions workflows for CI and release orchestration.
-- [ ] **REL-03**: Execute GoReleaser on `v*` tags using repository release config.
+- [ ] **REL-03**: Execute GoReleaser from the release workflow after Release Please creates a tag, using the repository release config.
 
 ### Milestone Closeout
 
