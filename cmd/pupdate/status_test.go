@@ -1,0 +1,212 @@
+package main
+
+import (
+	"bytes"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/aaronflorey/pupdate/internal/detection"
+	"github.com/aaronflorey/pupdate/internal/freshness"
+	"github.com/aaronflorey/pupdate/internal/state"
+)
+
+func TestStatusShowsReadyTarget(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock")
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		detectFn = detection.Detect
+		evaluateFreshnessFn = freshness.Evaluate
+		lookPath = exec.LookPath
+	})
+	detectFn = func(string) ([]detection.DetectionResult, error) {
+		return []detection.DetectionResult{{
+			Ecosystem:    detection.EcosystemNode,
+			Managers:     []string{"bun"},
+			MatchedFiles: []string{"bun.lock"},
+		}}, nil
+	}
+	evaluateFreshnessFn = func(string, []detection.DetectionResult, state.FileState) ([]freshness.EcosystemDecision, error) {
+		return []freshness.EcosystemDecision{{
+			Ecosystem:        string(detection.EcosystemNode),
+			StateKey:         "node",
+			Decision:         freshness.DecisionUpdate,
+			Reason:           "dependency lockfiles changed since last successful run",
+			Lockfiles:        map[string]string{"bun.lock": "new"},
+			LockfileMetadata: map[string]state.LockfileMetadata{"bun.lock": {Size: 1}},
+		}}, nil
+	}
+	lookPath = func(file string) (string, error) {
+		if file == "bun" {
+			return "/fake/bin/bun", nil
+		}
+		return "", exec.ErrNotFound
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("status command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "run_status: ready") {
+		t.Fatalf("expected ready run status, got %q", out)
+	}
+	if !strings.Contains(out, "run_reason: 1 ecosystem needs updates") {
+		t.Fatalf("expected ready run reason, got %q", out)
+	}
+	if !strings.Contains(out, "detected_targets: 1") {
+		t.Fatalf("expected one detected target, got %q", out)
+	}
+	if !strings.Contains(out, "[node]") {
+		t.Fatalf("expected node target section, got %q", out)
+	}
+	if !strings.Contains(out, "freshness: update") {
+		t.Fatalf("expected freshness update, got %q", out)
+	}
+	if !strings.Contains(out, "install_status: ready") {
+		t.Fatalf("expected ready install status, got %q", out)
+	}
+	if !strings.Contains(out, "install_command: bun install --frozen-lockfile --ignore-scripts") {
+		t.Fatalf("expected bun install command, got %q", out)
+	}
+	if !strings.Contains(out, "manager_path: /fake/bin/bun") {
+		t.Fatalf("expected manager path, got %q", out)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
+func TestStatusShowsRepoSkipForPupIgnore(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, ".pupignore")
+	withChdir(t, dir)
+
+	detectCalls := 0
+	t.Cleanup(func() {
+		detectFn = detection.Detect
+	})
+	detectFn = func(string) ([]detection.DetectionResult, error) {
+		detectCalls++
+		return nil, errors.New("detect should not run")
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("status command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "run_status: skip") {
+		t.Fatalf("expected skip run status, got %q", out)
+	}
+	if !strings.Contains(out, "run_reason: repo marked with .pupignore") {
+		t.Fatalf("expected .pupignore skip reason, got %q", out)
+	}
+	if !strings.Contains(out, "detected_targets: 0") {
+		t.Fatalf("expected zero detected targets, got %q", out)
+	}
+	if detectCalls != 0 {
+		t.Fatalf("expected detectFn to be skipped, got %d calls", detectCalls)
+	}
+}
+
+func TestStatusReturnsConfigParseErrorWhenYAMLIsInvalid(t *testing.T) {
+	homeDir := t.TempDir()
+	configHome := filepath.Join(homeDir, ".config")
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	if err := os.WriteFile(configPath, []byte("root_directories: [oops\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected status command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to parse "+configPath) {
+		t.Fatalf("expected parse error with config path, got %q", err.Error())
+	}
+}
+
+func TestStatusShowsBlockedTargetWhenManagerMissing(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock")
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		detectFn = detection.Detect
+		evaluateFreshnessFn = freshness.Evaluate
+		lookPath = exec.LookPath
+	})
+	detectFn = func(string) ([]detection.DetectionResult, error) {
+		return []detection.DetectionResult{{
+			Ecosystem:    detection.EcosystemNode,
+			Managers:     []string{"bun"},
+			MatchedFiles: []string{"bun.lock"},
+		}}, nil
+	}
+	evaluateFreshnessFn = func(string, []detection.DetectionResult, state.FileState) ([]freshness.EcosystemDecision, error) {
+		return []freshness.EcosystemDecision{{
+			Ecosystem:        string(detection.EcosystemNode),
+			StateKey:         "node",
+			Decision:         freshness.DecisionUpdate,
+			Reason:           "dependency lockfiles changed since last successful run",
+			Lockfiles:        map[string]string{"bun.lock": "new"},
+			LockfileMetadata: map[string]state.LockfileMetadata{"bun.lock": {Size: 1}},
+		}}, nil
+	}
+	lookPath = func(string) (string, error) {
+		return "", exec.ErrNotFound
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("status command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "run_status: blocked") {
+		t.Fatalf("expected blocked run status, got %q", out)
+	}
+	if !strings.Contains(out, "install_status: blocked") {
+		t.Fatalf("expected blocked install status, got %q", out)
+	}
+	if !strings.Contains(out, "install_reason: bun not found on PATH") {
+		t.Fatalf("expected missing manager reason, got %q", out)
+	}
+	if !strings.Contains(out, "manager_path: (none)") {
+		t.Fatalf("expected empty manager path, got %q", out)
+	}
+}
