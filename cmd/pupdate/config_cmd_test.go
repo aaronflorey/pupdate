@@ -15,7 +15,7 @@ func TestConfigShowsPathAndResolvedRootDirectories(t *testing.T) {
 	configHome := filepath.Join(homeDir, ".config")
 	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
 	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
-	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/src\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/src\nquiet: true\nallow_scripts: true\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("HOME", homeDir)
@@ -49,6 +49,12 @@ func TestConfigShowsPathAndResolvedRootDirectories(t *testing.T) {
 	}
 	if !strings.Contains(out, "root_directories_resolved: "+expectedResolvedRoot) {
 		t.Fatalf("expected resolved root_directories in output, got %q", out)
+	}
+	if !strings.Contains(out, "quiet: true") {
+		t.Fatalf("expected quiet=true in output, got %q", out)
+	}
+	if !strings.Contains(out, "allow_scripts: true") {
+		t.Fatalf("expected allow_scripts=true in output, got %q", out)
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
@@ -84,6 +90,12 @@ func TestConfigShowsUnsetValuesWhenConfigIsMissing(t *testing.T) {
 	}
 	if !strings.Contains(out, "root_directories_resolved: (not set)") {
 		t.Fatalf("expected unset resolved root_directories in output, got %q", out)
+	}
+	if !strings.Contains(out, "quiet: (not set)") {
+		t.Fatalf("expected unset quiet in output, got %q", out)
+	}
+	if !strings.Contains(out, "allow_scripts: (not set)") {
+		t.Fatalf("expected unset allow_scripts in output, got %q", out)
 	}
 
 	if _, err := os.Stat(expectedPath); !errors.Is(err, os.ErrNotExist) {

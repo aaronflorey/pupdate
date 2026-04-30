@@ -32,7 +32,7 @@ pupdate run --quiet
 PUPDATE_SKIP_INSTALL=1 pupdate run`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return executeRun(cmd, runOptions{Quiet: quiet, AllowScripts: allowScripts})
+			return executeRun(cmd, quiet, allowScripts)
 		},
 		SilenceErrors: true,
 	}

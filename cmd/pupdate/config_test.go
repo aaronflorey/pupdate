@@ -122,6 +122,39 @@ func TestResolveUserConfigReturnsIndexErrorForInvalidRootDirectoriesEntry(t *tes
 	}
 }
 
+func TestResolveRunOptionsUsesConfigDefaults(t *testing.T) {
+	quiet := true
+	allowScripts := true
+
+	options := resolveRunOptions(nil, userConfig{Quiet: &quiet, AllowScripts: &allowScripts}, false, false)
+
+	if !options.Quiet {
+		t.Fatal("expected quiet to default from config")
+	}
+	if !options.AllowScripts {
+		t.Fatal("expected allow-scripts to default from config")
+	}
+}
+
+func TestResolveRunOptionsPrefersExplicitFlags(t *testing.T) {
+	quiet := true
+	allowScripts := true
+
+	cmd := newRunCmd()
+	if err := cmd.ParseFlags([]string{"--quiet=false", "--allow-scripts=false"}); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+
+	options := resolveRunOptions(cmd, userConfig{Quiet: &quiet, AllowScripts: &allowScripts}, false, false)
+
+	if options.Quiet {
+		t.Fatal("expected explicit --quiet=false to override config")
+	}
+	if options.AllowScripts {
+		t.Fatal("expected explicit --allow-scripts=false to override config")
+	}
+}
+
 func TestIsTopLevelDirectoryWithinRoot(t *testing.T) {
 	root := filepath.Join(string(filepath.Separator), "tmp", "code")
 	topLevelProject := filepath.Join(root, "my-project")
