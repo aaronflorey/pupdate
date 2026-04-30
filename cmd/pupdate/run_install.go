@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -105,7 +107,11 @@ func selectManagerPlan(result detection.DetectionResult, allowScripts bool) (man
 		if result.Managers[0] != "kst" {
 			return managerPlan{}, false, fmt.Sprintf("unsupported Kasetto manager %q; skipping install", result.Managers[0])
 		}
-		return managerPlan{Manager: "kst", Args: []string{"sync", "--project"}}, true, ""
+		configPath := kasettoConfigPath(result.MatchedFiles)
+		if configPath == "" {
+			return managerPlan{}, false, "Kasetto project has no local kasetto.yaml or kasetto.yml; skipping install"
+		}
+		return managerPlan{Manager: "kst", Args: []string{"sync", "--project", "--config", configPath}}, true, ""
 	case detection.EcosystemGo:
 		return buildInstallPlan("gomod", managers.CommandInput{})
 	case detection.EcosystemRust:
@@ -115,6 +121,17 @@ func selectManagerPlan(result detection.DetectionResult, allowScripts bool) (man
 	default:
 		return managerPlan{}, false, fmt.Sprintf("unsupported ecosystem %q; skipping install", result.Ecosystem)
 	}
+}
+
+func kasettoConfigPath(matchedFiles []string) string {
+	for _, matchedFile := range matchedFiles {
+		base := filepath.Base(matchedFile)
+		if strings.EqualFold(base, "kasetto.yaml") || strings.EqualFold(base, "kasetto.yml") {
+			return matchedFile
+		}
+	}
+
+	return ""
 }
 
 func buildInstallPlan(managerName string, input managers.CommandInput) (managerPlan, bool, string) {

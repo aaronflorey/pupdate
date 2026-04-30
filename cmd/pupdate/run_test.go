@@ -1033,9 +1033,9 @@ func TestSelectManagerPlanExpandedManagersUseSafeFlags(t *testing.T) {
 		},
 		{
 			name:    "kasetto",
-			result:  detection.DetectionResult{Ecosystem: detection.EcosystemKasetto, Managers: []string{"kst"}},
+			result:  detection.DetectionResult{Ecosystem: detection.EcosystemKasetto, Managers: []string{"kst"}, MatchedFiles: []string{"kasetto.yaml"}},
 			manager: "kst",
-			args:    []string{"sync", "--project"},
+			args:    []string{"sync", "--project", "--config", "kasetto.yaml"},
 		},
 		{
 			name:    "go",
@@ -1090,8 +1090,8 @@ func TestSelectManagerPlanAllowScriptsDropsScriptBlockingFlags(t *testing.T) {
 		},
 		{
 			name:   "kasetto",
-			result: detection.DetectionResult{Ecosystem: detection.EcosystemKasetto, Managers: []string{"kst"}},
-			args:   []string{"sync", "--project"},
+			result: detection.DetectionResult{Ecosystem: detection.EcosystemKasetto, Managers: []string{"kst"}, MatchedFiles: []string{"kasetto.yaml"}},
+			args:   []string{"sync", "--project", "--config", "kasetto.yaml"},
 		},
 	}
 
@@ -1198,7 +1198,7 @@ func TestRunPrintsRunLineForExpandedManagers(t *testing.T) {
 	}{
 		{name: "node npm", file: "package-lock.json", ecosystem: "node", manager: "npm", args: "ci --ignore-scripts"},
 		{name: "python pip", file: "requirements.txt", ecosystem: "python", manager: "pip", args: "install -r requirements.txt --disable-pip-version-check --no-input"},
-		{name: "kasetto", file: "kasetto.lock", ecosystem: "kasetto", manager: "kst", args: "sync --project"},
+		{name: "kasetto", file: "kasetto.yaml", ecosystem: "kasetto", manager: "kst", args: "sync --project --config kasetto.yaml"},
 		{name: "go", file: "go.mod", ecosystem: "go", manager: "go", args: "mod download"},
 	}
 
@@ -1238,6 +1238,36 @@ func TestRunPrintsRunLineForExpandedManagers(t *testing.T) {
 				t.Fatalf("expected run status output for %s", tt.ecosystem)
 			}
 		})
+	}
+}
+
+func TestSelectManagerPlanKasettoYMLUsesExplicitConfig(t *testing.T) {
+	plan, ok, reason := selectManagerPlan(detection.DetectionResult{
+		Ecosystem:    detection.EcosystemKasetto,
+		Managers:     []string{"kst"},
+		MatchedFiles: []string{"frontend/kasetto.yml", "frontend/kasetto.lock"},
+	}, false)
+
+	if !ok {
+		t.Fatalf("expected kasetto yml manager plan to be supported, reason=%q", reason)
+	}
+	if !slices.Equal(plan.Args, []string{"sync", "--project", "--config", "frontend/kasetto.yml"}) {
+		t.Fatalf("unexpected kasetto yml args: %#v", plan.Args)
+	}
+}
+
+func TestSelectManagerPlanKasettoLockOnlySkips(t *testing.T) {
+	_, ok, reason := selectManagerPlan(detection.DetectionResult{
+		Ecosystem:    detection.EcosystemKasetto,
+		Managers:     []string{"kst"},
+		MatchedFiles: []string{"kasetto.lock"},
+	}, false)
+
+	if ok {
+		t.Fatal("expected lock-only kasetto detection to skip")
+	}
+	if !strings.Contains(reason, "no local kasetto.yaml or kasetto.yml") {
+		t.Fatalf("unexpected lock-only kasetto skip reason: %q", reason)
 	}
 }
 
