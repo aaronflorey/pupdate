@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/aaronflorey/pupdate/compare/v0.6.0...v0.6.1) (2026-05-04)
+
+
+### Bug Fixes
+
+* change syscall to platform specific ([08a9ec3](https://github.com/aaronflorey/pupdate/commit/08a9ec38aac8cfa1708607e49c0a195ac642e782))
+
 ## [0.6.0](https://github.com/aaronflorey/pupdate/compare/v0.5.0...v0.6.0) (2026-05-04)
 
 
