@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.6.0](https://github.com/aaronflorey/pupdate/compare/v0.5.0...v0.6.0) (2026-05-04)
+
+
+### Features
+
+* **cli:** add project status diagnostics ([1a70825](https://github.com/aaronflorey/pupdate/commit/1a70825fe46884ffca07ab70a56978834b74828a))
+* **config:** add run default controls ([a82d79d](https://github.com/aaronflorey/pupdate/commit/a82d79dd5d429968a041f640c7e325f3a0c7881f))
+* **detection:** Add Kasetto support ([67ed5e7](https://github.com/aaronflorey/pupdate/commit/67ed5e70e8100c9906b152987eff8904adca67b7))
+* **hook:** add opt-in async shell mode ([3a93903](https://github.com/aaronflorey/pupdate/commit/3a93903757d329206f31399ec5699d7d8fbda3c2))
+
+
+### Bug Fixes
+
+* **config:** Match root directories case-insensitively ([34bbd36](https://github.com/aaronflorey/pupdate/commit/34bbd36a846339eac1a0e86f7c8e643d5e868174))
+* **config:** respect root directory casing ([eea69d6](https://github.com/aaronflorey/pupdate/commit/eea69d6ee55bf47fc0e61a71f4109872256b9245))
+* **config:** stop auto-creating user config ([12406a9](https://github.com/aaronflorey/pupdate/commit/12406a950b5a54c845e8bebeb6749a20989fc93b))
+* **detection:** preserve canonical Cargo.lock casing ([e419124](https://github.com/aaronflorey/pupdate/commit/e4191243dccaf333ad6fe7e60cff44f90b8c511d))
+* **detection:** preserve matched lockfile paths ([a0f0f59](https://github.com/aaronflorey/pupdate/commit/a0f0f59b071f83436b8364c63dc673d4adf04e47))
+* **freshness:** always hash lockfiles ([c1c7049](https://github.com/aaronflorey/pupdate/commit/c1c70493b12248ec05e2b47b30ecba4ade967a8c))
+* **freshness:** bound git submodule status checks ([44a0775](https://github.com/aaronflorey/pupdate/commit/44a077596edcc6ceed548c73d467edccec7435af))
+* **freshness:** safely reuse unchanged lockfile hashes ([b7e893a](https://github.com/aaronflorey/pupdate/commit/b7e893ac443f3d450152e879d84216176d792837))
+* **hook:** keep async overlap locks live ([38f7187](https://github.com/aaronflorey/pupdate/commit/38f7187eefe5b12528e7ce12dfe190b5e7cea3ae))
+* **kasetto:** correct subproject config path and close audit drift ([57c0364](https://github.com/aaronflorey/pupdate/commit/57c03648c889cf3f78fdad97b2dfe1edf7d8d3fb))
+* **kasetto:** require local config for sync ([e19f928](https://github.com/aaronflorey/pupdate/commit/e19f9280f7d53043fc667eba86714da5f0fcbe95))
+* **kasetto:** scope sync to detected project ([702f006](https://github.com/aaronflorey/pupdate/commit/702f006f84cb3936d8a5a9ba7d2578de04eec6f9))
+* **release:** keep one release workflow path ([ede7c28](https://github.com/aaronflorey/pupdate/commit/ede7c2889348a798a24c2b2180e3be5dc14d7ddd))
+* **state:** fsync parent directory on save ([97be85e](https://github.com/aaronflorey/pupdate/commit/97be85eee9758954f11222edcac8509d9d791b7c))
+* **state:** prune stale run entries ([97373c7](https://github.com/aaronflorey/pupdate/commit/97373c776f7bdf479c8df30888e088084f45d5dc))
+
+
+### Performance Improvements
+
+* **freshness:** cache lockfile metadata ([c2753d9](https://github.com/aaronflorey/pupdate/commit/c2753d948c1a49dc05a4e27044b512e4db06c74e))
+
 ## [0.5.0](https://github.com/aaronflorey/pupdate/compare/v0.4.0...v0.5.0) (2026-04-22)
 
 
