@@ -3,8 +3,8 @@ github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2
 github.com/bazelbuild/buildtools v0.0.0-20260211083412-859bfffeef82 h1:PmoVmwzAnGb0iCjulb7Mgsaqw2Wj36LQJ8VyYaFe/ak=
 github.com/bazelbuild/buildtools v0.0.0-20260211083412-859bfffeef82/go.mod h1:PLNUetjLa77TCCziPsz0EI8a6CUxgC+1jgmWv0H25tg=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
-github.com/git-pkgs/managers v0.8.2 h1:nFgUU6/Z8eguf3XcWlZ6ydDjsgvFzn7mV2aZVidHZYY=
-github.com/git-pkgs/managers v0.8.2/go.mod h1:8DR7tIQEEyPyJ7QGzStVbovnGl7tAJcrhQLzjQPzFzc=
+github.com/git-pkgs/managers v0.8.3 h1:AYdJBc1POZ2N2pG8UFmwHkzss8tnXy4NBvZF+wZAgWY=
+github.com/git-pkgs/managers v0.8.3/go.mod h1:8DR7tIQEEyPyJ7QGzStVbovnGl7tAJcrhQLzjQPzFzc=
 github.com/git-pkgs/manifests v0.4.3 h1:bjwWQiJ2Xqih/PjBCyJtt2bx9WqKjMq/YxoNSDUE8bQ=
 github.com/git-pkgs/manifests v0.4.3/go.mod h1:Jvvua5FVNvEFx+I5QQ8vbhHAz11gsMfrbocFCX/BvVo=
 github.com/git-pkgs/packageurl-go v0.3.1 h1:WM3RBABQZLaRBxgKyYughc3cVBE8KyQxbSC6Jt5ak7M=
