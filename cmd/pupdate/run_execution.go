@@ -218,12 +218,39 @@ func executeRunResult(
 		fmt.Fprintln(cmd.ErrOrStderr(), formatDoneLine(result, plan))
 	}
 
+	lockfiles, lockfileMetadata := postInstallLockfileState(result, decision, err == nil)
+
 	return ecosystemOutcome{
 		StateKey:         result.StateKey(),
 		Succeeded:        err == nil,
-		Lockfiles:        decision.Lockfiles,
-		LockfileMetadata: decision.LockfileMetadata,
+		Lockfiles:        lockfiles,
+		LockfileMetadata: lockfileMetadata,
 	}, true
+}
+
+func postInstallLockfileState(
+	result detection.DetectionResult,
+	decision freshness.EcosystemDecision,
+	installSucceeded bool,
+) (map[string]string, map[string]state.LockfileMetadata) {
+	if !installSucceeded {
+		return decision.Lockfiles, decision.LockfileMetadata
+	}
+
+	postInstallDecisions, err := evaluateFreshnessFn(".", []detection.DetectionResult{result}, state.FileState{
+		Version: state.SchemaVersion,
+		Ecosystems: map[string]state.EcosystemState{
+			result.StateKey(): {
+				Lockfiles:        cloneLockfiles(decision.Lockfiles),
+				LockfileMetadata: cloneLockfileMetadata(decision.LockfileMetadata),
+			},
+		},
+	})
+	if err != nil || len(postInstallDecisions) != 1 {
+		return decision.Lockfiles, decision.LockfileMetadata
+	}
+
+	return postInstallDecisions[0].Lockfiles, postInstallDecisions[0].LockfileMetadata
 }
 
 func shouldRefreshMetadata(result detection.DetectionResult, decision freshness.EcosystemDecision) bool {
