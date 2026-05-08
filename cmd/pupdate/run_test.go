@@ -750,6 +750,59 @@ func TestRunQuietPrintsRunAndDoneWhenUpdateRuns(t *testing.T) {
 	}
 }
 
+func TestRunPersistsPostInstallLockfileState(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock")
+	withChdir(t, dir)
+
+	var installCalls int
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		installCalls++
+		return exec.CommandContext(ctx, "sh", "-c", "printf 'updated' > bun.lock")
+	}
+
+	first := newRunCmd()
+	first.SetOut(&bytes.Buffer{})
+	first.SetErr(&bytes.Buffer{})
+	if err := first.Execute(); err != nil {
+		t.Fatalf("first run failed: %v", err)
+	}
+
+	stored, warnings, err := state.NewStore(dir).Load()
+	if err != nil {
+		t.Fatalf("load state after first run: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected state warnings after first run: %v", warnings)
+	}
+	entry, ok := stored.Ecosystems["node"]
+	if !ok {
+		t.Fatalf("expected node state after first run, got %#v", stored.Ecosystems)
+	}
+	currentHash := hashFileForTest(t, filepath.Join(dir, "bun.lock"))
+	if entry.Lockfiles["bun.lock"] != currentHash {
+		t.Fatalf("expected persisted lockfile hash %q, got %q", currentHash, entry.Lockfiles["bun.lock"])
+	}
+
+	second := newRunCmd()
+	second.SetOut(&bytes.Buffer{})
+	second.SetErr(&bytes.Buffer{})
+	if err := second.Execute(); err != nil {
+		t.Fatalf("second run failed: %v", err)
+	}
+
+	if installCalls != 1 {
+		t.Fatalf("expected install to run once across two executions, got %d", installCalls)
+	}
+}
+
 func TestRunPrintsSkipStatusForUnchangedEcosystem(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "composer.lock")
