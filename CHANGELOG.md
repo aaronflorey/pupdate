@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/aaronflorey/pupdate/compare/v0.6.1...v0.6.2) (2026-05-10)
+
+
+### Bug Fixes
+
+* persist post-install lockfile state ([e03dfe0](https://github.com/aaronflorey/pupdate/commit/e03dfe0771dc52abfa31c07c0cf2114294a285e1))
+
 ## [0.6.1](https://github.com/aaronflorey/pupdate/compare/v0.6.0...v0.6.1) (2026-05-04)
 
 
