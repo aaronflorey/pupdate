@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3](https://github.com/aaronflorey/pupdate/compare/v0.6.2...v0.6.3) (2026-05-18)
+
+
+### Bug Fixes
+
+* skip unchanged composer lockfiles ([ee61365](https://github.com/aaronflorey/pupdate/commit/ee61365c036443a68f281a8141405dc101e89394))
+
 ## [0.6.2](https://github.com/aaronflorey/pupdate/compare/v0.6.1...v0.6.2) (2026-05-10)
 
 
