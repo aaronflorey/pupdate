@@ -841,6 +841,45 @@ func TestRunPrintsSkipStatusForUnchangedEcosystem(t *testing.T) {
 	}
 }
 
+func TestRunSkipsUnchangedPHPProjectWithLegacyVendorChecksumState(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "composer.lock", filepath.Join("vendor", "composer", "installed.php"))
+	withChdir(t, dir)
+
+	initial := state.Empty()
+	initial.Ecosystems["php"] = state.EcosystemState{
+		LastSuccessAt: "2026-03-01T12:00:00Z",
+		Lockfiles: map[string]string{
+			"composer.lock":            hashFileForTest(t, filepath.Join(dir, "composer.lock")),
+			"vendor/.pupdate-checksum": "legacy",
+		},
+	}
+	if err := state.NewStore(dir).Save(initial); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	t.Cleanup(func() {
+		execCommand = exec.CommandContext
+	})
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		t.Fatalf("install should not execute on unchanged composer.lock with legacy vendor checksum state")
+		return exec.CommandContext(ctx, name, args...)
+	}
+
+	var stderr bytes.Buffer
+	cmd := newRunCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run command failed: %v", err)
+	}
+
+	line := "pupdate: skip php (dependency lockfiles unchanged since last successful run)"
+	if !strings.Contains(stderr.String(), line) {
+		t.Fatalf("expected unchanged skip status line, got %q", stderr.String())
+	}
+}
+
 func TestRunUpdatesDepthOneSubdirectoryAndSavesNamespacedState(t *testing.T) {
 	dir := t.TempDir()
 	frontendDir := filepath.Join(dir, "frontend")

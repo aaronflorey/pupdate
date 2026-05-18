@@ -67,19 +67,7 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 			return nil, err
 		}
 
-		if result.Ecosystem == detection.EcosystemPHP {
-			shouldTrackVendor, err := shouldTrackPHPVendor(dir, result, ecosystemState, hasState)
-			if err != nil {
-				return nil, err
-			}
-			if shouldTrackVendor {
-				checksum, err := hashPHPVendorChecksum(dir, result)
-				if err != nil {
-					return nil, err
-				}
-				lockfiles[phpVendorChecksumKey] = checksum
-			}
-		}
+		storedLockfiles := comparableLockfiles(result.Ecosystem, ecosystemState.Lockfiles)
 		decision := EcosystemDecision{
 			Ecosystem:        ecosystem,
 			StateKey:         stateKey,
@@ -88,10 +76,21 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 			Lockfiles:        lockfiles,
 			LockfileMetadata: lockfileMetadata,
 		}
-		if hasState && len(ecosystemState.Lockfiles) > 0 {
-			if lockfilesEqual(ecosystemState.Lockfiles, lockfiles) {
+		legacyPHPVendorTracked := result.Ecosystem == detection.EcosystemPHP && len(storedLockfiles) != len(ecosystemState.Lockfiles)
+		if hasState && len(storedLockfiles) > 0 {
+			if lockfilesEqual(storedLockfiles, lockfiles) {
 				decision.Decision = DecisionSkip
 				decision.Reason = "dependency lockfiles unchanged since last successful run"
+				if legacyPHPVendorTracked {
+					vendorExists, err := isDirectory(phpVendorPath(dir, result))
+					if err != nil {
+						return nil, fmt.Errorf("stat php vendor directory: %w", err)
+					}
+					if !vendorExists {
+						decision.Decision = DecisionUpdate
+						decision.Reason = "composer vendor directory missing since last successful run"
+					}
+				}
 			} else {
 				decision.Reason = "dependency lockfiles changed since last successful run"
 			}
@@ -114,70 +113,29 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 	return decisions, nil
 }
 
-func shouldTrackPHPVendor(dir string, result detection.DetectionResult, ecosystemState state.EcosystemState, hasState bool) (bool, error) {
-	vendorPath := phpVendorPath(dir, result)
-	vendorExists, err := isDirectory(vendorPath)
-	if err != nil {
-		return false, fmt.Errorf("stat php vendor directory: %w", err)
-	}
-	if vendorExists {
-		return true, nil
-	}
-
-	if !hasState {
-		return false, nil
-	}
-
-	_, trackedVendor := ecosystemState.Lockfiles[phpVendorChecksumKey]
-	return trackedVendor, nil
-}
-
-func hashPHPVendorChecksum(dir string, result detection.DetectionResult) (string, error) {
-	hasher := sha256.New()
-	trackedPaths := []string{
-		"vendor",
-		"vendor/autoload.php",
-		"vendor/composer/installed.json",
-		"vendor/composer/installed.php",
-	}
-
-	for _, rel := range trackedPaths {
-		fullPath := filepath.Join(phpProjectPath(dir, result), filepath.FromSlash(rel))
-		if err := writeFingerprintEntry(hasher, rel, fullPath); err != nil {
-			return "", err
-		}
-	}
-
-	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
-func writeFingerprintEntry(hasher io.Writer, relPath string, fullPath string) error {
-	info, err := os.Stat(fullPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			_, writeErr := io.WriteString(hasher, relPath+"|missing\n")
-			return writeErr
-		}
-		return fmt.Errorf("stat %q: %w", relPath, err)
-	}
-
-	if _, err := io.WriteString(hasher, fmt.Sprintf("%s|%d|%d|%s\n", relPath, info.Size(), info.ModTime().UTC().UnixNano(), info.Mode().String())); err != nil {
-		return err
-	}
-	if info.IsDir() {
-		return nil
-	}
-
-	contentHash, err := hashFileFn(fullPath)
-	if err != nil {
-		return fmt.Errorf("hash %q: %w", relPath, err)
-	}
-	_, err = io.WriteString(hasher, contentHash+"\n")
-	return err
-}
-
 func phpVendorPath(dir string, result detection.DetectionResult) string {
 	return filepath.Join(phpProjectPath(dir, result), "vendor")
+}
+
+func comparableLockfiles(ecosystem detection.Ecosystem, lockfiles map[string]string) map[string]string {
+	if ecosystem != detection.EcosystemPHP {
+		return lockfiles
+	}
+	if len(lockfiles) == 0 {
+		return lockfiles
+	}
+	if _, ok := lockfiles[phpVendorChecksumKey]; !ok {
+		return lockfiles
+	}
+
+	trimmed := make(map[string]string, len(lockfiles)-1)
+	for key, value := range lockfiles {
+		if key == phpVendorChecksumKey {
+			continue
+		}
+		trimmed[key] = value
+	}
+	return trimmed
 }
 
 func phpProjectPath(dir string, result detection.DetectionResult) string {
