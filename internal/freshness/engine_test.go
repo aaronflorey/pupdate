@@ -393,10 +393,10 @@ func TestEvaluateMixedCaseLockfileUsesActualMatchedPath(t *testing.T) {
 	}
 }
 
-func TestEvaluatePHPVendorDriftRunsWhenLockfileUnchanged(t *testing.T) {
+func TestEvaluatePHPLegacyVendorChecksumSkipsWhenComposerLockUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "composer.lock", "same")
-	writeFile(t, dir, "vendor/composer/installed.php", "old")
+	writeFile(t, dir, "vendor/composer/installed.php", "same")
 
 	current := state.Empty()
 	current.Ecosystems["php"] = state.EcosystemState{
@@ -419,24 +419,24 @@ func TestEvaluatePHPVendorDriftRunsWhenLockfileUnchanged(t *testing.T) {
 		t.Fatalf("Evaluate returned error: %v", err)
 	}
 
-	if results[0].Decision != DecisionUpdate {
-		t.Fatalf("expected DecisionUpdate, got %q", results[0].Decision)
+	if results[0].Decision != DecisionSkip {
+		t.Fatalf("expected DecisionSkip, got %q", results[0].Decision)
 	}
-	if results[0].Reason != "dependency lockfiles changed since last successful run" {
-		t.Fatalf("expected changed-lockfiles reason, got %q", results[0].Reason)
+	if results[0].Reason != "dependency lockfiles unchanged since last successful run" {
+		t.Fatalf("expected unchanged-lockfiles reason, got %q", results[0].Reason)
 	}
 }
 
-func TestEvaluatePHPMissingVendorChecksumTriggersRefresh(t *testing.T) {
+func TestEvaluatePHPMissingVendorDirectoryRunsWhenComposerLockUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "composer.lock", "same")
-	writeFile(t, dir, "vendor/composer/installed.php", "same")
 
 	current := state.Empty()
 	current.Ecosystems["php"] = state.EcosystemState{
 		LastSuccessAt: "2026-03-01T14:00:00Z",
 		Lockfiles: map[string]string{
-			"composer.lock": hashText("same"),
+			"composer.lock":      hashText("same"),
+			phpVendorChecksumKey: hashText("legacy"),
 		},
 	}
 
@@ -453,7 +453,10 @@ func TestEvaluatePHPMissingVendorChecksumTriggersRefresh(t *testing.T) {
 	}
 
 	if results[0].Decision != DecisionUpdate {
-		t.Fatalf("expected DecisionUpdate for missing vendor checksum migration, got %q", results[0].Decision)
+		t.Fatalf("expected DecisionUpdate for missing vendor directory, got %q", results[0].Decision)
+	}
+	if results[0].Reason != "composer vendor directory missing since last successful run" {
+		t.Fatalf("unexpected missing-vendor reason: %q", results[0].Reason)
 	}
 }
 
