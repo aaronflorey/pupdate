@@ -17,7 +17,7 @@ func newInitCmd() *cobra.Command {
 		Example: `eval "$(pupdate init --shell bash)"
 eval "$(pupdate init --shell zsh)"
 eval "$(pupdate init --shell fish)"
-eval "$(pupdate init --shell bash --mode async)"`,
+eval "$(pupdate init --shell bash --mode foreground)"`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolved, err := resolveShell(shell)
@@ -41,6 +41,6 @@ eval "$(pupdate init --shell bash --mode async)"`,
 	}
 
 	cmd.Flags().StringVar(&shell, "shell", "", "shell to configure (bash, zsh, or fish)")
-	cmd.Flags().StringVar(&mode, "mode", hookModeForeground, "hook execution mode (foreground or async)")
+	cmd.Flags().StringVar(&mode, "mode", hookModeAsync, "hook execution mode (async default, or foreground)")
 	return cmd
 }

@@ -44,7 +44,7 @@ func supportedInitShellsText() string {
 func resolveHookMode(requested string) (string, error) {
 	resolved := strings.ToLower(strings.TrimSpace(requested))
 	if resolved == "" {
-		return hookModeForeground, nil
+		return hookModeAsync, nil
 	}
 
 	switch resolved {

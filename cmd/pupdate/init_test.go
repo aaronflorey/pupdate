@@ -26,8 +26,8 @@ func TestInitBashSnippetIncludesHookAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "pupdate hook --quiet") {
 		t.Fatalf("expected bash snippet to invoke quiet hook, got %q", out)
 	}
-	if strings.Contains(out, "--async") {
-		t.Fatalf("expected default bash snippet to stay foreground, got %q", out)
+	if !strings.Contains(out, "pupdate hook --quiet --async") {
+		t.Fatalf("expected default bash snippet to use async mode, got %q", out)
 	}
 	if !strings.Contains(out, "[ \"$PWD\" != \"$HOME\" ]") {
 		t.Fatalf("expected bash snippet to skip $HOME, got %q", out)
@@ -57,8 +57,8 @@ func TestInitZshSnippetIncludesHooksAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "pupdate hook --quiet") {
 		t.Fatalf("expected zsh snippet to invoke quiet hook, got %q", out)
 	}
-	if strings.Contains(out, "--async") {
-		t.Fatalf("expected default zsh snippet to stay foreground, got %q", out)
+	if !strings.Contains(out, "pupdate hook --quiet --async") {
+		t.Fatalf("expected default zsh snippet to use async mode, got %q", out)
 	}
 	if !strings.Contains(out, "[ \"$PWD\" != \"$HOME\" ]") {
 		t.Fatalf("expected zsh snippet to skip $HOME, got %q", out)
@@ -88,8 +88,8 @@ func TestInitFishSnippetIncludesHookAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "pupdate hook --quiet") {
 		t.Fatalf("expected fish snippet to invoke quiet hook, got %q", out)
 	}
-	if strings.Contains(out, "--async") {
-		t.Fatalf("expected default fish snippet to stay foreground, got %q", out)
+	if !strings.Contains(out, "pupdate hook --quiet --async") {
+		t.Fatalf("expected default fish snippet to use async mode, got %q", out)
 	}
 	if !strings.Contains(out, "test \"$PWD\" != \"$HOME\"") {
 		t.Fatalf("expected fish snippet to skip $HOME, got %q", out)
@@ -115,6 +115,25 @@ func TestInitAsyncModeUsesBackgroundHook(t *testing.T) {
 	out := stdout.String()
 	if !strings.Contains(out, "pupdate hook --quiet --async") {
 		t.Fatalf("expected async init mode to launch background hook, got %q", out)
+	}
+}
+
+func TestInitForegroundModeUsesSynchronousHook(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"init", "--shell", "bash", "--mode", "foreground"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if strings.Contains(out, "--async") {
+		t.Fatalf("expected foreground init mode to use synchronous hook, got %q", out)
 	}
 }
 
@@ -158,6 +177,9 @@ func TestInitDefaultsToFishWhenShellEnvIsFish(t *testing.T) {
 	if !strings.Contains(out, "pupdate hook --quiet") {
 		t.Fatalf("expected fish default snippet to invoke quiet hook, got %q", out)
 	}
+	if !strings.Contains(out, "pupdate hook --quiet --async") {
+		t.Fatalf("expected fish default snippet to use async mode, got %q", out)
+	}
 }
 
 func TestInitDefaultsToBashWhenShellEnvIsEmptyOrUnknown(t *testing.T) {
@@ -191,6 +213,9 @@ func TestInitDefaultsToBashWhenShellEnvIsEmptyOrUnknown(t *testing.T) {
 			}
 			if !strings.Contains(out, "pupdate hook --quiet") {
 				t.Fatalf("expected bash default snippet to invoke quiet hook, got %q", out)
+			}
+			if !strings.Contains(out, "pupdate hook --quiet --async") {
+				t.Fatalf("expected bash default snippet to use async mode, got %q", out)
 			}
 		})
 	}
