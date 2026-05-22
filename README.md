@@ -34,6 +34,8 @@ Requires [`bin`](https://github.com/aaronflorey/bin) to be installed and availab
 
 ## Release and CI
 
+- Supported release platforms are Linux and macOS.
+- Operating systems outside that support surface are best-effort only and are not shipped as release binaries.
 - CI runs on pull requests and pushes to `main` across Linux and macOS.
 - `release-please` maintains changelog and semver release PRs.
 - GoReleaser publishes tagged release binaries and updates Homebrew tap artifacts.
@@ -192,6 +194,10 @@ Output includes:
 
 For git submodules, `pupdate` also checks `git submodule status --recursive` so it
 can react to submodule drift even when `.gitmodules` itself has not changed.
+
+On unsupported operating systems, freshness checks may rehash unchanged lockfiles
+more often because the file-identity shortcut used to skip rehashing is only
+implemented on supported platforms.
 
 ## Status Output
 
