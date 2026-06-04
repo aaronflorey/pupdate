@@ -79,6 +79,9 @@ func TestStatusShowsReadyTarget(t *testing.T) {
 	if !strings.Contains(out, "run_reason: 1 ecosystem needs updates") {
 		t.Fatalf("expected ready run reason, got %q", out)
 	}
+	if !strings.Contains(out, "run_guidance: (none)") {
+		t.Fatalf("expected no top-level guidance for ready status, got %q", out)
+	}
 	if !strings.Contains(out, "detected_targets: 1") {
 		t.Fatalf("expected one detected target, got %q", out)
 	}
@@ -93,6 +96,9 @@ func TestStatusShowsReadyTarget(t *testing.T) {
 	}
 	if !strings.Contains(out, "manager_path: /fake/bin/bun") {
 		t.Fatalf("expected manager path, got %q", out)
+	}
+	if !strings.Contains(out, "install_guidance: (none)") {
+		t.Fatalf("expected no install guidance for ready target, got %q", out)
 	}
 	if !strings.Contains(out, "quiet: true") {
 		t.Fatalf("expected quiet config in output, got %q", out)
@@ -149,6 +155,9 @@ func TestStatusShowsRepoSkipForHomeDirectory(t *testing.T) {
 	if !strings.Contains(out, "run_reason: current directory is $HOME") {
 		t.Fatalf("expected home-directory skip reason, got %q", out)
 	}
+	if !strings.Contains(out, "run_guidance: run pupdate from a project directory instead of $HOME") {
+		t.Fatalf("expected home-directory guidance, got %q", out)
+	}
 	if !strings.Contains(out, "detected_targets: 0") {
 		t.Fatalf("expected zero detected targets, got %q", out)
 	}
@@ -197,6 +206,9 @@ func TestStatusShowsRepoSkipForPupIgnore(t *testing.T) {
 	}
 	if !strings.Contains(out, "run_reason: repo marked with .pupignore") {
 		t.Fatalf("expected .pupignore skip reason, got %q", out)
+	}
+	if !strings.Contains(out, "run_guidance: remove .pupignore if you want pupdate to manage this repo") {
+		t.Fatalf("expected .pupignore guidance, got %q", out)
 	}
 	if !strings.Contains(out, "state_warnings: state file is invalid; treating as empty") {
 		t.Fatalf("expected invalid state warning, got %q", out)
@@ -257,6 +269,9 @@ func TestStatusShowsRepoSkipOutsideConfiguredRootDirectories(t *testing.T) {
 	if !strings.Contains(out, "run_reason: current directory is outside configured root_directories") {
 		t.Fatalf("expected configured-root skip reason, got %q", out)
 	}
+	if !strings.Contains(out, "run_guidance: move this project under root_directories, or update root_directories to include it") {
+		t.Fatalf("expected configured-root guidance, got %q", out)
+	}
 	if !strings.Contains(out, "detected_targets: 0") {
 		t.Fatalf("expected zero detected targets, got %q", out)
 	}
@@ -299,6 +314,9 @@ func TestStatusShowsActiveBackgroundHookLock(t *testing.T) {
 	}
 	if !strings.Contains(out, "background_hook_lock_path: "+filepath.Join(".", backgroundHookLockFileName)) {
 		t.Fatalf("expected background hook lock path, got %q", out)
+	}
+	if !strings.Contains(out, "run_guidance: wait for the current background hook run to finish before expecting another async hook run") {
+		t.Fatalf("expected active-hook guidance, got %q", out)
 	}
 }
 
@@ -383,5 +401,8 @@ func TestStatusShowsBlockedTargetWhenManagerMissing(t *testing.T) {
 	}
 	if !strings.Contains(out, "manager_path: (none)") {
 		t.Fatalf("expected empty manager path, got %q", out)
+	}
+	if !strings.Contains(out, "install_guidance: install bun or add it to PATH, then rerun pupdate status") {
+		t.Fatalf("expected missing-manager guidance, got %q", out)
 	}
 }

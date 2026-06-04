@@ -14,6 +14,7 @@ type statusSnapshot struct {
 	WorkingDirectory string
 	RunStatus        string
 	RunReason        string
+	RunGuidance      []string
 	RunOptions       runOptions
 	HookLockPath     string
 	HookLockStatus   string
@@ -40,6 +41,7 @@ type statusTarget struct {
 	InstallReason   string
 	InstallCommand  string
 	ManagerPath     string
+	InstallGuidance []string
 }
 
 func newStatusCmd() *cobra.Command {
@@ -84,6 +86,7 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 	}
 	snapshot.HookLockPath = hookLockPath
 	snapshot.HookLockStatus = hookLockStatus
+	snapshot.RunGuidance = statusRunGuidance(preflight.SkipReason, hookLockStatus)
 
 	if preflight.SkipReason != preflightSkipNone {
 		snapshot.RunStatus = "skip"
@@ -104,6 +107,25 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 	snapshot.DetectedTargets = len(targets)
 	snapshot.RunStatus, snapshot.RunReason = summarizeStatusTargets(targets)
 	return snapshot, nil
+}
+
+func statusRunGuidance(reason preflightSkipReason, hookLockStatus string) []string {
+	guidance := make([]string, 0, 2)
+
+	switch reason {
+	case preflightSkipHomeDirectory:
+		guidance = append(guidance, "run pupdate from a project directory instead of $HOME")
+	case preflightSkipOutsideRoots:
+		guidance = append(guidance, "move this project under root_directories, or update root_directories to include it")
+	case preflightSkipPupIgnore:
+		guidance = append(guidance, "remove .pupignore if you want pupdate to manage this repo")
+	}
+
+	if hookLockStatus == "active" {
+		guidance = append(guidance, "wait for the current background hook run to finish before expecting another async hook run")
+	}
+
+	return guidance
 }
 
 func statusSkipReason(reason preflightSkipReason) string {
@@ -148,6 +170,7 @@ func buildStatusTarget(result detection.DetectionResult, decision freshness.Ecos
 	if err != nil {
 		target.InstallStatus = "blocked"
 		target.InstallReason = fmt.Sprintf("%s not found on PATH", plan.Manager)
+		target.InstallGuidance = []string{fmt.Sprintf("install %s or add it to PATH, then rerun pupdate status", plan.Manager)}
 		return target
 	}
 
@@ -211,6 +234,9 @@ func writeStatusSnapshot(w io.Writer, snapshot statusSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "run_reason: %s\n\n", snapshot.RunReason); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "run_guidance: %s\n\n", displayStatusValues(snapshot.RunGuidance, "(none)")); err != nil {
 		return err
 	}
 
@@ -290,6 +316,9 @@ func writeStatusSnapshot(w io.Writer, snapshot statusSnapshot) error {
 			return err
 		}
 		if _, err := fmt.Fprintf(w, "manager_path: %s\n", displayStatusValue(target.ManagerPath)); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(w, "install_guidance: %s\n", displayStatusValues(target.InstallGuidance, "(none)")); err != nil {
 			return err
 		}
 	}
