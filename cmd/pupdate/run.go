@@ -13,7 +13,7 @@ type runOptions struct {
 	AllowScripts bool
 }
 
-var detectFn = detection.Detect
+var detectFn = detection.DetectWithWorkspaceGlobs
 var execCommand = exec.CommandContext
 var lookPath = exec.LookPath
 var evaluateFreshnessFn = freshness.Evaluate

@@ -15,7 +15,11 @@ type ignoreMatcher interface {
 }
 
 func Detect(dir string) ([]DetectionResult, error) {
-	directories, err := scanDirectories(dir)
+	return DetectWithWorkspaceGlobs(dir, nil)
+}
+
+func DetectWithWorkspaceGlobs(dir string, workspaceGlobs []string) ([]DetectionResult, error) {
+	directories, err := scanDirectories(dir, workspaceGlobs)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +41,7 @@ func Detect(dir string) ([]DetectionResult, error) {
 	return results, nil
 }
 
-func scanDirectories(dir string) ([]string, error) {
+func scanDirectories(dir string, workspaceGlobs []string) ([]string, error) {
 	matcher, err := loadIgnoreMatcher(dir)
 	if err != nil {
 		return nil, err
@@ -49,6 +53,7 @@ func scanDirectories(dir string) ([]string, error) {
 	}
 
 	directories := []string{"."}
+	directorySet := map[string]struct{}{".": {}}
 	for _, entry := range entries {
 		if !entry.IsDir() || (entry.Type()&os.ModeSymlink) != 0 {
 			continue
@@ -59,7 +64,7 @@ func scanDirectories(dir string) ([]string, error) {
 			continue
 		}
 
-		directories = append(directories, relPath)
+		directories = appendDirectory(directories, directorySet, relPath)
 
 		if relPath != "packages" {
 			continue
@@ -80,10 +85,61 @@ func scanDirectories(dir string) ([]string, error) {
 				continue
 			}
 
-			directories = append(directories, packagePath)
+			directories = appendDirectory(directories, directorySet, packagePath)
 		}
 	}
+
+	for _, workspaceGlob := range workspaceGlobs {
+		matchedDirectories, err := scanWorkspaceGlob(dir, matcher, workspaceGlob)
+		if err != nil {
+			return nil, err
+		}
+		for _, matchedDirectory := range matchedDirectories {
+			directories = appendDirectory(directories, directorySet, matchedDirectory)
+		}
+	}
+
 	slices.Sort(directories[1:])
+	return directories, nil
+}
+
+func appendDirectory(directories []string, seen map[string]struct{}, relPath string) []string {
+	if _, ok := seen[relPath]; ok {
+		return directories
+	}
+
+	seen[relPath] = struct{}{}
+	return append(directories, relPath)
+}
+
+func scanWorkspaceGlob(dir string, matcher ignoreMatcher, workspaceGlob string) ([]string, error) {
+	matches, err := filepath.Glob(filepath.Join(dir, filepath.FromSlash(workspaceGlob)))
+	if err != nil {
+		return nil, err
+	}
+
+	directories := make([]string, 0, len(matches))
+	for _, match := range matches {
+		info, err := os.Lstat(match)
+		if err != nil {
+			return nil, err
+		}
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
+
+		relPath, err := filepath.Rel(dir, match)
+		if err != nil {
+			return nil, err
+		}
+		relPath = filepath.ToSlash(relPath)
+		if relPath == "." || shouldSkipDirectory(matcher, relPath) {
+			continue
+		}
+
+		directories = append(directories, relPath)
+	}
+
 	return directories, nil
 }
 

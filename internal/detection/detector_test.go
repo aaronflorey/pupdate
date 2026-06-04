@@ -339,6 +339,50 @@ func TestDetectDoesNotScanPastDepthOne(t *testing.T) {
 	}
 }
 
+func TestDetectWithWorkspaceGlobsIncludesConfiguredMatches(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "apps", "web"), 0o755); err != nil {
+		t.Fatalf("mkdir apps/web: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "services", "api"), 0o755); err != nil {
+		t.Fatalf("mkdir services/api: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "apps", "web", "nested"), 0o755); err != nil {
+		t.Fatalf("mkdir apps/web/nested: %v", err)
+	}
+	writeFiles(t, filepath.Join(dir, "apps", "web"), "package-lock.json")
+	writeFiles(t, filepath.Join(dir, "services", "api"), "composer.lock")
+	writeFiles(t, filepath.Join(dir, "apps", "web", "nested"), "Cargo.lock")
+
+	results, err := DetectWithWorkspaceGlobs(dir, []string{"apps/*", "services/*"})
+	if err != nil {
+		t.Fatalf("DetectWithWorkspaceGlobs returned error: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Fatalf("expected detections only for configured workspace matches, got %#v", results)
+	}
+
+	node := assertContainsEcosystem(t, results, EcosystemNode)
+	if node.Directory != "apps/web" {
+		t.Fatalf("expected apps/web directory for node detection, got %q", node.Directory)
+	}
+	assertHasFile(t, node.MatchedFiles, "apps/web/package-lock.json")
+
+	php := assertContainsEcosystem(t, results, EcosystemPHP)
+	if php.Directory != "services/api" {
+		t.Fatalf("expected services/api directory for php detection, got %q", php.Directory)
+	}
+	assertHasFile(t, php.MatchedFiles, "services/api/composer.lock")
+	for _, result := range results {
+		for _, matchedFile := range result.MatchedFiles {
+			if matchedFile == "apps/web/nested/Cargo.lock" {
+				t.Fatalf("expected nested directory beyond configured workspace match to remain unscanned, got %#v", results)
+			}
+		}
+	}
+}
+
 func TestDetectIncludesPackagesChildren(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "packages", "web"), 0o755); err != nil {
@@ -412,4 +456,34 @@ func TestDetectSkipsGitignoredDirectories(t *testing.T) {
 		t.Fatalf("expected packages/active directory for node detection, got %q", node.Directory)
 	}
 	assertHasFile(t, node.MatchedFiles, "packages/active/package-lock.json")
+}
+
+func TestDetectWithWorkspaceGlobsSkipsGitignoredMatches(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "apps", "ignored"), 0o755); err != nil {
+		t.Fatalf("mkdir apps/ignored: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "apps", "active"), 0o755); err != nil {
+		t.Fatalf("mkdir apps/active: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("apps/ignored/\n"), 0o644); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+	writeFiles(t, filepath.Join(dir, "apps", "ignored"), "package-lock.json")
+	writeFiles(t, filepath.Join(dir, "apps", "active"), "composer.lock")
+
+	results, err := DetectWithWorkspaceGlobs(dir, []string{"apps/*"})
+	if err != nil {
+		t.Fatalf("DetectWithWorkspaceGlobs returned error: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected only non-ignored workspace glob detection, got %#v", results)
+	}
+
+	php := assertContainsEcosystem(t, results, EcosystemPHP)
+	if php.Directory != "apps/active" {
+		t.Fatalf("expected apps/active directory for php detection, got %q", php.Directory)
+	}
+	assertHasFile(t, php.MatchedFiles, "apps/active/composer.lock")
 }

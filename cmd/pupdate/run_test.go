@@ -127,9 +127,9 @@ func TestRunDoesNotCreateUserConfigWhenMissing(t *testing.T) {
 func TestRunReturnsDetectionFailedPrefixOnDetectorError(t *testing.T) {
 	disableInstall(t)
 	t.Cleanup(func() {
-		detectFn = detection.Detect
+		detectFn = detection.DetectWithWorkspaceGlobs
 	})
-	detectFn = func(string) ([]detection.DetectionResult, error) {
+	detectFn = func(string, []string) ([]detection.DetectionResult, error) {
 		return nil, errors.New("boom")
 	}
 
@@ -169,9 +169,9 @@ func TestRunPupignorePrintsSkipRepoAndSkipsInstalls(t *testing.T) {
 
 	detectCalls := 0
 	t.Cleanup(func() {
-		detectFn = detection.Detect
+		detectFn = detection.DetectWithWorkspaceGlobs
 	})
-	detectFn = func(string) ([]detection.DetectionResult, error) {
+	detectFn = func(string, []string) ([]detection.DetectionResult, error) {
 		detectCalls++
 		return nil, errors.New("detect should not run when .pupignore is present")
 	}
@@ -1540,12 +1540,12 @@ func TestRunExecutesGitSubmoduleUpdateWhenGitDecisionRequiresUpdate(t *testing.T
 	withChdir(t, dir)
 
 	t.Cleanup(func() {
-		detectFn = detection.Detect
+		detectFn = detection.DetectWithWorkspaceGlobs
 		lookPath = exec.LookPath
 		execCommand = exec.CommandContext
 		evaluateFreshnessFn = freshness.Evaluate
 	})
-	detectFn = func(string) ([]detection.DetectionResult, error) {
+	detectFn = func(string, []string) ([]detection.DetectionResult, error) {
 		return []detection.DetectionResult{{
 			Ecosystem:    detection.Ecosystem("git"),
 			Managers:     []string{"git"},

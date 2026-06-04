@@ -13,7 +13,7 @@ This file is the queue and status tracker for the `.planning/update.md` improvem
 
 Current TODO: none
 
-Next recommended TODO: P3-T2
+Next recommended TODO: P3-T5
 
 Last update: 2026-06-04
 
@@ -47,7 +47,7 @@ Last update: 2026-06-04
 | P2-R1 | complete | Review the shared preflight and status-guidance phase for behavior drift, scope creep, and missing regression coverage. | `.planning/todos/P2-R1.md` | Review `cmd/pupdate` diffs and rerun `go test ./cmd/pupdate -count=1`. |
 | P3-T1 | complete | Define validated `workspace_globs` config support and surface it through `pupdate config`. | `.planning/todos/P3-T1.md` | `go test ./cmd/pupdate -count=1` |
 | P3-T4 | complete | Define validated folder blacklist config support for exact directory-name matches and surface it through `pupdate config`. | `.planning/todos/P3-T4.md` | `go test ./cmd/pupdate -count=1` |
-| P3-T2 | pending | Apply `workspace_globs` during detection while keeping the current shallow default scan unchanged. | `.planning/todos/P3-T2.md` | `go test ./internal/detection ./cmd/pupdate -count=1` and benchmark guardrail inspection. |
+| P3-T2 | complete | Apply `workspace_globs` during detection while keeping the current shallow default scan unchanged. | `.planning/todos/P3-T2.md` | `go test ./internal/detection ./cmd/pupdate -count=1` and benchmark guardrail inspection. |
 | P3-T5 | pending | Apply the folder blacklist across all detection paths, including the default shallow scan and configured workspace expansions. | `.planning/todos/P3-T5.md` | `go test ./internal/detection ./cmd/pupdate -count=1` and benchmark guardrail inspection. |
 | P3-T3 | pending | Document `workspace_globs` behavior, defaults, and examples in the README. | `.planning/todos/P3-T3.md` | Manual inspection of README examples and config docs. |
 | P3-T6 | pending | Document the folder blacklist behavior, exact-match semantics, and examples in the README. | `.planning/todos/P3-T6.md` | Manual inspection of README config docs and examples. |
