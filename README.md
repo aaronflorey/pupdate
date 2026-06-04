@@ -139,9 +139,28 @@ User config:
 
 - `~/.config/pupdate/config.yaml`
 - `root_directories:` with one or more paths (for example `~/code`): only run when the current working directory is a direct child of one of those roots; `~` expands to the user's home directory
+- `workspace_globs:` with one or more repo-relative directory globs (for example `apps/*` or `services/*`): opt in to scanning additional workspace directories that match those patterns
 - `quiet: true|false`: set the default `run` quiet mode without needing `--quiet` in shell aliases or wrappers
 - `allow_scripts: true|false`: set the default lifecycle-script policy for `run`; explicit command flags still win
-- when missing, `pupdate run` and `pupdate config` use implicit defaults (`root_directories: []`) without creating the config directory or writing `config.yaml`
+- when missing, `pupdate run` and `pupdate config` use implicit defaults (`root_directories: []`, `workspace_globs: []`) without creating the config directory or writing `config.yaml`
+
+`workspace_globs` is optional and does not change the default traversal unless you
+set it. Without any configured globs, `pupdate` still scans only the repository
+root, other depth-1 subdirectories, and direct children of `packages/`.
+
+Example config for a monorepo that keeps the shallow default scan but also checks
+common workspace folders:
+
+```yaml
+workspace_globs:
+  - apps/*
+  - services/*
+```
+
+Each glob is matched relative to the repository root, so the example above adds
+directories like `apps/web` and `services/api`. Matches add those exact
+workspace directories to the scan; `pupdate` does not continue scanning deeper
+nested directories under each match unless another configured glob matches them.
 
 ### `pupdate init`
 
@@ -163,6 +182,7 @@ Output includes:
 - whether the config file currently exists
 - the configured `root_directories` values from the file
 - the resolved `root_directories` values after `~` expansion and path normalization
+- the configured and resolved `workspace_globs` values
 - the configured `quiet` and `allow_scripts` values when set
 
 ### `pupdate status`
@@ -183,7 +203,9 @@ Output includes:
 ## How It Works
 
 1. `pupdate run` scans the current directory, other depth-1 subdirectories, and
-   direct children of `packages/` for known lockfiles and manifests.
+   direct children of `packages/` for known lockfiles and manifests. If you set
+   `workspace_globs`, it also scans matching repo-relative workspace directories
+   such as `apps/*` or `services/*`.
 2. It detects the matching ecosystem and package manager.
 3. It compares current file hashes against the local `.pupdate` state file using
    namespaced keys per ecosystem and directory.
