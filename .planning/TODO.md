@@ -13,7 +13,7 @@ This file is the queue and status tracker for the `.planning/update.md` improvem
 
 Current TODO: none
 
-Next recommended TODO: P2-R1
+Next recommended TODO: P3-T1
 
 Last update: 2026-06-04
 
@@ -44,7 +44,7 @@ Last update: 2026-06-04
 | P1-R1 | complete | Review the phase-1 hook and platform contract changes against the PRD and support-policy decisions. | `.planning/todos/P1-R1.md` | Review changed files, rerun referenced checks, confirm no Windows promises remain. |
 | P2-T1 | complete | Extract a shared preflight collection layer used by both `run` and `status` without changing their distinct behaviors. | `.planning/todos/P2-T1.md` | `go test ./cmd/pupdate -count=1` |
 | P2-T2 | complete | Add action-oriented remediation guidance to `pupdate status` for the blocked states already detected by the shared preflight flow. | `.planning/todos/P2-T2.md` | `go test ./cmd/pupdate -count=1` |
-| P2-R1 | pending | Review the shared preflight and status-guidance phase for behavior drift, scope creep, and missing regression coverage. | `.planning/todos/P2-R1.md` | Review `cmd/pupdate` diffs and rerun `go test ./cmd/pupdate -count=1`. |
+| P2-R1 | complete | Review the shared preflight and status-guidance phase for behavior drift, scope creep, and missing regression coverage. | `.planning/todos/P2-R1.md` | Review `cmd/pupdate` diffs and rerun `go test ./cmd/pupdate -count=1`. |
 | P3-T1 | pending | Define validated `workspace_globs` config support and surface it through `pupdate config`. | `.planning/todos/P3-T1.md` | `go test ./cmd/pupdate -count=1` |
 | P3-T4 | pending | Define validated folder blacklist config support for exact directory-name matches and surface it through `pupdate config`. | `.planning/todos/P3-T4.md` | `go test ./cmd/pupdate -count=1` |
 | P3-T2 | pending | Apply `workspace_globs` during detection while keeping the current shallow default scan unchanged. | `.planning/todos/P3-T2.md` | `go test ./internal/detection ./cmd/pupdate -count=1` and benchmark guardrail inspection. |
