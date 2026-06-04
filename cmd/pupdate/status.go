@@ -3,13 +3,10 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/freshness"
-	"github.com/aaronflorey/pupdate/internal/state"
 	"github.com/spf13/cobra"
 )
 
@@ -64,43 +61,21 @@ func newStatusCmd() *cobra.Command {
 }
 
 func collectStatusSnapshot() (statusSnapshot, error) {
-	workingDirectory, err := os.Getwd()
-	if err != nil {
-		return statusSnapshot{}, fmt.Errorf("failed to resolve working directory: %w", err)
-	}
-
-	configPath, err := resolveUserConfigPath()
+	preflight, err := collectPreflight(preflightOptions{LoadStateOnSkip: true})
 	if err != nil {
 		return statusSnapshot{}, err
-	}
-
-	rawConfig, resolvedConfig, configExists, err := loadStatusConfig(configPath)
-	if err != nil {
-		return statusSnapshot{}, err
-	}
-
-	statePath := filepath.Join(workingDirectory, state.FileName)
-	stateExists, err := pathExists(statePath)
-	if err != nil {
-		return statusSnapshot{}, fmt.Errorf("failed to stat %s: %w", statePath, err)
-	}
-
-	store := state.NewStore(".")
-	currentState, warnings, err := store.Load()
-	if err != nil {
-		return statusSnapshot{}, fmt.Errorf("failed to load state: %w", err)
 	}
 
 	snapshot := statusSnapshot{
-		WorkingDirectory: workingDirectory,
-		RunOptions:       resolveRunOptions(nil, resolvedConfig, false, false),
-		ConfigPath:       configPath,
-		ConfigExists:     configExists,
-		RawConfig:        rawConfig,
-		ResolvedConfig:   resolvedConfig,
-		StatePath:        statePath,
-		StateExists:      stateExists,
-		StateWarnings:    warnings,
+		WorkingDirectory: preflight.WorkingDirectory,
+		RunOptions:       resolveRunOptions(nil, preflight.ResolvedConfig, false, false),
+		ConfigPath:       preflight.ConfigPath,
+		ConfigExists:     preflight.ConfigExists,
+		RawConfig:        preflight.RawConfig,
+		ResolvedConfig:   preflight.ResolvedConfig,
+		StatePath:        preflight.StatePath,
+		StateExists:      preflight.StateExists,
+		StateWarnings:    preflight.StateWarnings,
 	}
 
 	hookLockPath, hookLockStatus, err := currentBackgroundHookStatus(".", backgroundHookNow())
@@ -110,30 +85,15 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 	snapshot.HookLockPath = hookLockPath
 	snapshot.HookLockStatus = hookLockStatus
 
-	repoStatus, repoReason, err := statusPrecheck(resolvedConfig)
-	if err != nil {
-		return statusSnapshot{}, err
-	}
-	if repoStatus != "" {
-		snapshot.RunStatus = repoStatus
-		snapshot.RunReason = repoReason
+	if preflight.SkipReason != preflightSkipNone {
+		snapshot.RunStatus = "skip"
+		snapshot.RunReason = statusSkipReason(preflight.SkipReason)
 		return snapshot, nil
 	}
 
-	results, err := detectFn(".")
-	if err != nil {
-		return statusSnapshot{}, fmt.Errorf("detection failed: %w", err)
-	}
-
-	decisions, err := evaluateFreshnessFn(".", results, currentState)
-	if err != nil {
-		return statusSnapshot{}, fmt.Errorf("failed to evaluate dependency freshness: %w", err)
-	}
-
-	indexedDecisions := indexDecisionsByEcosystem(decisions)
-	targets := make([]statusTarget, 0, len(results))
-	for _, result := range results {
-		decision, ok := indexedDecisions[result.StateKey()]
+	targets := make([]statusTarget, 0, len(preflight.Results))
+	for _, result := range preflight.Results {
+		decision, ok := preflight.DecisionByEcosystem[result.StateKey()]
 		if !ok {
 			continue
 		}
@@ -146,62 +106,17 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 	return snapshot, nil
 }
 
-func loadStatusConfig(configPath string) (userConfig, userConfig, bool, error) {
-	configExists, err := pathExists(configPath)
-	if err != nil {
-		return userConfig{}, userConfig{}, false, fmt.Errorf("failed to stat %s: %w", configPath, err)
+func statusSkipReason(reason preflightSkipReason) string {
+	switch reason {
+	case preflightSkipHomeDirectory:
+		return "current directory is $HOME"
+	case preflightSkipOutsideRoots:
+		return "current directory is outside configured root_directories"
+	case preflightSkipPupIgnore:
+		return "repo marked with .pupignore"
+	default:
+		return ""
 	}
-
-	rawConfig, err := readUserConfig(configPath)
-	if err != nil {
-		return userConfig{}, userConfig{}, false, err
-	}
-
-	resolvedConfig, err := resolveUserConfig(rawConfig)
-	if err != nil {
-		return userConfig{}, userConfig{}, false, err
-	}
-
-	return rawConfig, resolvedConfig, configExists, nil
-}
-
-func pathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
-}
-
-func statusPrecheck(config userConfig) (string, string, error) {
-	inHomeDir, err := isHomeDirectory()
-	if err != nil {
-		return "", "", err
-	}
-	if inHomeDir {
-		return "skip", "current directory is $HOME", nil
-	}
-
-	outsideConfiguredRoots, err := isOutsideConfiguredRootDirectories(config)
-	if err != nil {
-		return "", "", err
-	}
-	if outsideConfiguredRoots {
-		return "skip", "current directory is outside configured root_directories", nil
-	}
-
-	ignored, err := hasPupIgnore(".")
-	if err != nil {
-		return "", "", fmt.Errorf("failed to check .pupignore: %w", err)
-	}
-	if ignored {
-		return "skip", "repo marked with .pupignore", nil
-	}
-
-	return "", "", nil
 }
 
 func buildStatusTarget(result detection.DetectionResult, decision freshness.EcosystemDecision, allowScripts bool) statusTarget {

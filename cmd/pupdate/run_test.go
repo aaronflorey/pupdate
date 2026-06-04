@@ -207,6 +207,37 @@ func TestRunPupignorePrintsSkipRepoAndSkipsInstalls(t *testing.T) {
 	}
 }
 
+func TestRunPrintsStateWarningsFromSharedPreflight(t *testing.T) {
+	disableInstall(t)
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock")
+	if err := os.WriteFile(filepath.Join(dir, state.FileName), []byte("not-json"), 0o644); err != nil {
+		t.Fatalf("write invalid state: %v", err)
+	}
+	withChdir(t, dir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	if stdout.Len() != 0 {
+		t.Fatalf("expected run to avoid stdout, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: state file is invalid; treating as empty") {
+		t.Fatalf("expected invalid state warning, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: installs disabled via PUPDATE_SKIP_INSTALL") {
+		t.Fatalf("expected install-disabled status after warning, got %q", stderr.String())
+	}
+}
+
 func TestHasPupIgnore(t *testing.T) {
 	t.Run("missing file", func(t *testing.T) {
 		dir := t.TempDir()

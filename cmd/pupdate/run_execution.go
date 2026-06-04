@@ -13,13 +13,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type runExecution struct {
-	Results             []detection.DetectionResult
-	Store               state.Store
-	CurrentState        state.FileState
-	DecisionByEcosystem map[string]freshness.EcosystemDecision
-}
-
 var userHomeDir = os.UserHomeDir
 
 var currentUserHomeDir = func() (string, error) {
@@ -31,43 +24,20 @@ var currentUserHomeDir = func() (string, error) {
 }
 
 func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool) error {
-	config, err := loadUserConfig()
+	preflight, err := collectPreflight(preflightOptions{})
 	if err != nil {
 		return err
 	}
 
-	options := resolveRunOptions(cmd, config, quietFlag, allowScriptsFlag)
+	options := resolveRunOptions(cmd, preflight.ResolvedConfig, quietFlag, allowScriptsFlag)
 
-	inHomeDir, err := isHomeDirectory()
-	if err != nil {
-		return err
-	}
-	if inHomeDir {
-		printStatus(cmd, options.Quiet, "pupdate: skip repo ($HOME)")
+	if skipLine, ok := runSkipStatusLine(preflight.SkipReason); ok {
+		printStatus(cmd, options.Quiet, skipLine)
 		return nil
 	}
 
-	restricted, err := isOutsideConfiguredRootDirectories(config)
-	if err != nil {
-		return err
-	}
-	if restricted {
-		printStatus(cmd, options.Quiet, "pupdate: skip repo (outside configured root_directories)")
-		return nil
-	}
-
-	ignored, err := hasPupIgnore(".")
-	if err != nil {
-		return fmt.Errorf("failed to check .pupignore: %w", err)
-	}
-	if ignored {
-		printStatus(cmd, options.Quiet, "pupdate: skip repo (.pupignore)")
-		return nil
-	}
-
-	execution, err := prepareRunExecution(cmd, options)
-	if err != nil {
-		return err
+	for _, warning := range preflight.StateWarnings {
+		printStatus(cmd, options.Quiet, "pupdate: "+warning)
 	}
 
 	installDisabled := isInstallDisabled()
@@ -75,8 +45,21 @@ func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool) error
 		printStatus(cmd, options.Quiet, "pupdate: installs disabled via PUPDATE_SKIP_INSTALL")
 	}
 
-	outcomes := executeRunResults(cmd, execution.Results, execution.DecisionByEcosystem, options, installDisabled)
-	return saveRunOutcomes(execution.Store, execution.CurrentState, execution.Results, outcomes)
+	outcomes := executeRunResults(cmd, preflight.Results, preflight.DecisionByEcosystem, options, installDisabled)
+	return saveRunOutcomes(preflight.Store, preflight.CurrentState, preflight.Results, outcomes)
+}
+
+func runSkipStatusLine(reason preflightSkipReason) (string, bool) {
+	switch reason {
+	case preflightSkipHomeDirectory:
+		return "pupdate: skip repo ($HOME)", true
+	case preflightSkipOutsideRoots:
+		return "pupdate: skip repo (outside configured root_directories)", true
+	case preflightSkipPupIgnore:
+		return "pupdate: skip repo (.pupignore)", true
+	default:
+		return "", false
+	}
 }
 
 func isOutsideConfiguredRootDirectories(config userConfig) (bool, error) {
@@ -113,34 +96,6 @@ func resolveRunOptions(cmd *cobra.Command, config userConfig, quietFlag bool, al
 		options.AllowScripts = allowScriptsFlag
 	}
 	return options
-}
-
-func prepareRunExecution(cmd *cobra.Command, options runOptions) (runExecution, error) {
-	results, err := detectFn(".")
-	if err != nil {
-		return runExecution{}, fmt.Errorf("detection failed: %w", err)
-	}
-
-	store := state.NewStore(".")
-	currentState, warnings, err := store.Load()
-	if err != nil {
-		return runExecution{}, fmt.Errorf("failed to load state: %w", err)
-	}
-	for _, warning := range warnings {
-		printStatus(cmd, options.Quiet, "pupdate: "+warning)
-	}
-
-	decisions, err := evaluateFreshnessFn(".", results, currentState)
-	if err != nil {
-		return runExecution{}, fmt.Errorf("failed to evaluate dependency freshness: %w", err)
-	}
-
-	return runExecution{
-		Results:             results,
-		Store:               store,
-		CurrentState:        currentState,
-		DecisionByEcosystem: indexDecisionsByEcosystem(decisions),
-	}, nil
 }
 
 func indexDecisionsByEcosystem(decisions []freshness.EcosystemDecision) map[string]freshness.EcosystemDecision {

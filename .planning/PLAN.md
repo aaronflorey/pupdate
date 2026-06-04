@@ -2,73 +2,89 @@
 
 ## TODO ID and Objective
 
-- ID: `P1-R1`
-- Objective: Review the phase-1 hook and platform contract changes against the PRD and resolved support-policy decisions.
+- ID: `P2-T1`
+- Objective: Extract a shared preflight collection layer used by both `run` and `status` without changing their distinct behaviors.
 
 ## Source Documents Consulted
 
 - `.planning/TODO.md`
 - `.planning/update.md`
 - `.planning/TODO-TRACE.md`
-- `.planning/todos/P1-R1.md`
-- `.planning/todos/P1-T1.md`
-- `.planning/todos/P1-T2.md`
+- `.planning/todos/P2-T1.md`
 - `.planning/quick/phase-15-performance-diagnostics-config-hook-planning.md`
-- `.planning/quick/post-v1-hardening-phase-planning.md`
 - `AGENTS.md`
-- `README.md`
-- `.goreleaser.yaml`
-- `cmd/pupdate/init.go`
-- `cmd/pupdate/init_test.go`
-- `cmd/pupdate/hook_test.go`
 - `go.mod`
+- `mise.toml`
+- `cmd/pupdate/run_execution.go`
+- `cmd/pupdate/status.go`
+- `cmd/pupdate/run_test.go`
+- `cmd/pupdate/status_test.go`
 
 ## Current Repository State Summary
 
-- `git status --short` returned no entries at selection time.
-- `.planning/PRD.md` does not exist in this repository; the queue's active PRD source is `.planning/update.md`.
-- `.planning/IMPLEMENTATION-PLAN.md` does not exist in this repository; approved implementation context comes from the phase planning docs referenced by the TODO briefs.
-- The phase-1 implementation TODOs already landed as commits `408e69f` (`P1-T1`) and `ea0fb4b` (`P1-T2`).
-- `README.md` now documents Linux and macOS as the supported release platforms and explains the unsupported-OS freshness limitation.
-- `.goreleaser.yaml` now targets `linux` and `darwin` only.
-- The remaining work for this TODO is review, verification, and any planning-file follow-up needed if defects are found.
+- Active queue state selected from `.planning/TODO.md`: `Current TODO: none`, `Next recommended TODO: P2-T1`, so `P2-T1` is now the active implementation TODO.
+- Fresh `git status --short` inspection showed no tracked worktree changes before this planning-state sync.
+- `.planning/PRD.md` does not exist in this repository; the active PRD source referenced by the queue and TODO brief is `.planning/update.md`.
+- `.planning/IMPLEMENTATION-PLAN.md` does not exist in this repository; approved implementation context for this TODO comes from `.planning/quick/phase-15-performance-diagnostics-config-hook-planning.md` and the detailed brief.
+- `cmd/pupdate/run_execution.go` and `cmd/pupdate/status.go` currently duplicate preflight logic for config loading, repo gating, detection, state loading, and freshness evaluation.
+- Existing regression coverage already exercises several skip and status cases in `cmd/pupdate/run_test.go` and `cmd/pupdate/status_test.go`.
 
-## Exact Files Expected To Change
+## Expected Starting Files
 
-- `.planning/PLAN.md`
-- `.planning/TODO.md`
-- `.planning/TODO-TRACE.md` only if review findings require additional repair mapping
-- `.planning/todos/P1-R1.md` only if reviewer notes are required by repository convention
+- `cmd/pupdate/run_execution.go`
+- `cmd/pupdate/status.go`
+- `cmd/pupdate/run_test.go`
+- `cmd/pupdate/status_test.go`
+- `cmd/pupdate/preflight.go`
+
+## Allowed Discovery Scope
+
+- Adjacent files under `cmd/pupdate/` may be added or updated only when directly required to complete the shared preflight refactor or its regression coverage.
+- Reuse existing helpers, seams, and generated equivalents instead of duplicating logic in new files.
+
+## Outside-Expected-File Policy
+
+- The expected files above are starting scope, not a hard allowlist.
+- A file outside that list may change only if it is directly required to satisfy `P2-T1`, is consistent with `.planning/update.md`, this plan, and the TODO brief, and is reported explicitly with rationale under `Outside expected files`.
+- Unrelated cleanup, renames, API changes, config-schema changes, and broader refactors are forbidden.
 
 ## Required Implementation Scope
 
-- Review the phase-1 implementation represented by `P1-T1` and `P1-T2` against the queue, PRD, and approved plan.
-- Confirm coverage for async-default hook behavior, supported-platform messaging, and unsupported-OS freshness documentation.
-- Record only focused planning-state follow-ups if a concrete defect is found.
+- Define a shared preflight collector or normalized result structure for the setup and decision flow used by both `run` and `status`.
+- Refactor `run` and `status` to consume that shared path while preserving their current output, branching, and side-effect differences.
+- Add or update regression coverage proving unchanged behavior for home-directory checks, configured-root exclusions, `.pupignore`, detection, state loading, and freshness evaluation.
 
 ## Explicit Non-Goals And Forbidden Changes
 
-- Do not change product runtime behavior in this TODO.
-- Do not edit phase-1 product code or docs unless a repair loop is required from review or verification findings.
-- Do not expand scope into phase 2 or later work.
-- Do not mark the TODO complete without reviewer/verifier PASS and explicit user approval.
-- Do not commit.
+- Do not add the later status-remediation UX planned for `P2-T2`.
+- Do not change detection depth, config schema, manager resolution behavior, or hook behavior.
+- Do not move the refactor outside `cmd/pupdate` unless an approved blocker decision says otherwise.
+- Do not mark any TODO complete and do not commit.
 
 ## Acceptance Criteria
 
-- The phase-1 implementation is compared against `P1-T1`, `P1-T2`, and the related PRD requirements.
-- Review explicitly checks for scope drift, missing tests, regressions, and unsupported Windows promises.
-- Verification reruns or inspects the required checks for this phase.
-- Any discovered defect is either repaired through the executor loop or recorded as a focused blocker.
+- `run` and `status` both use a common preflight collection layer.
+- Existing skip/readiness semantics remain unchanged apart from internal refactoring.
+- Regression tests cover the shared preflight path for both commands.
+- Any outside-expected-file change is necessary, justified, and reported.
 
 ## Required Checks
 
-- Review diffs for `cmd/pupdate/init.go`, related tests, `README.md`, and `.goreleaser.yaml`.
 - `go test ./cmd/pupdate -count=1`
-- Manual inspection that no Windows release promises remain.
+- Manual inspection that the shared helper now owns the duplicated setup logic while `run` and `status` keep distinct behavior only where intended.
+
+## Blocker Policy
+
+- Stop only for unapproved product, public API or CLI, persistence or migration, security, dependency or tooling, architecture, external integration, or UX decisions not already approved by the PRD, plan, TODO brief, or current repository conventions.
+- Continue through normal implementation issues within scope, including stale expected-file lists, directly required adjacent-file edits, missing helper or test seam files, reuse of generated artifacts or equivalents, and failing checks caused by the active implementation.
+
+## Generated Artifact Policy
+
+- Reuse existing generated classes, types, files, fixtures, schemas, and other generated equivalents when available instead of creating duplicates.
+- Do not introduce duplicate helpers or parallel preflight result types when an existing local pattern can be extended cleanly.
 
 ## Stop Conditions
 
-- The phase reveals a new product or support-surface decision not covered by the resolved planning clarifications.
-- Required repair work would extend beyond the phase-1 task scopes without explicit approval.
-- Review or verification cannot substantively prove the phase-1 contract is correct.
+- The refactor would require moving logic into packages outside `cmd/pupdate`.
+- Existing tests reveal a behavior difference that requires a product decision rather than a refactor fix.
+- The work would require modifying unrelated command surfaces beyond what is directly required for `P2-T1`.

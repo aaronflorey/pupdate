@@ -111,9 +111,64 @@ func TestStatusShowsReadyTarget(t *testing.T) {
 	}
 }
 
+func TestStatusShowsRepoSkipForHomeDirectory(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	withChdir(t, homeDir)
+
+	detectCalls := 0
+	freshnessCalls := 0
+	t.Cleanup(func() {
+		detectFn = detection.Detect
+		evaluateFreshnessFn = freshness.Evaluate
+	})
+	detectFn = func(string) ([]detection.DetectionResult, error) {
+		detectCalls++
+		return nil, errors.New("detect should not run")
+	}
+	evaluateFreshnessFn = func(string, []detection.DetectionResult, state.FileState) ([]freshness.EcosystemDecision, error) {
+		freshnessCalls++
+		return nil, errors.New("freshness should not run")
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("status command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "run_status: skip") {
+		t.Fatalf("expected skip run status, got %q", out)
+	}
+	if !strings.Contains(out, "run_reason: current directory is $HOME") {
+		t.Fatalf("expected home-directory skip reason, got %q", out)
+	}
+	if !strings.Contains(out, "detected_targets: 0") {
+		t.Fatalf("expected zero detected targets, got %q", out)
+	}
+	if detectCalls != 0 {
+		t.Fatalf("expected detectFn to be skipped, got %d calls", detectCalls)
+	}
+	if freshnessCalls != 0 {
+		t.Fatalf("expected freshness to be skipped, got %d calls", freshnessCalls)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
 func TestStatusShowsRepoSkipForPupIgnore(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, ".pupignore")
+	if err := os.WriteFile(filepath.Join(dir, state.FileName), []byte("not-json"), 0o644); err != nil {
+		t.Fatalf("write invalid state: %v", err)
+	}
 	withChdir(t, dir)
 
 	detectCalls := 0
@@ -143,6 +198,9 @@ func TestStatusShowsRepoSkipForPupIgnore(t *testing.T) {
 	if !strings.Contains(out, "run_reason: repo marked with .pupignore") {
 		t.Fatalf("expected .pupignore skip reason, got %q", out)
 	}
+	if !strings.Contains(out, "state_warnings: state file is invalid; treating as empty") {
+		t.Fatalf("expected invalid state warning, got %q", out)
+	}
 	if !strings.Contains(out, "detected_targets: 0") {
 		t.Fatalf("expected zero detected targets, got %q", out)
 	}
@@ -151,6 +209,65 @@ func TestStatusShowsRepoSkipForPupIgnore(t *testing.T) {
 	}
 	if detectCalls != 0 {
 		t.Fatalf("expected detectFn to be skipped, got %d calls", detectCalls)
+	}
+}
+
+func TestStatusShowsRepoSkipOutsideConfiguredRootDirectories(t *testing.T) {
+	configHome := t.TempDir()
+	allowedRoot := filepath.Join(configHome, "workspace")
+	projectDir := t.TempDir()
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - "+allowedRoot+"\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	withChdir(t, projectDir)
+
+	detectCalls := 0
+	freshnessCalls := 0
+	t.Cleanup(func() {
+		detectFn = detection.Detect
+		evaluateFreshnessFn = freshness.Evaluate
+	})
+	detectFn = func(string) ([]detection.DetectionResult, error) {
+		detectCalls++
+		return nil, errors.New("detect should not run")
+	}
+	evaluateFreshnessFn = func(string, []detection.DetectionResult, state.FileState) ([]freshness.EcosystemDecision, error) {
+		freshnessCalls++
+		return nil, errors.New("freshness should not run")
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("status command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "run_status: skip") {
+		t.Fatalf("expected skip run status, got %q", out)
+	}
+	if !strings.Contains(out, "run_reason: current directory is outside configured root_directories") {
+		t.Fatalf("expected configured-root skip reason, got %q", out)
+	}
+	if !strings.Contains(out, "detected_targets: 0") {
+		t.Fatalf("expected zero detected targets, got %q", out)
+	}
+	if detectCalls != 0 {
+		t.Fatalf("expected detectFn to be skipped, got %d calls", detectCalls)
+	}
+	if freshnessCalls != 0 {
+		t.Fatalf("expected freshness to be skipped, got %d calls", freshnessCalls)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
 	}
 }
 
@@ -188,6 +305,7 @@ func TestStatusShowsActiveBackgroundHookLock(t *testing.T) {
 func TestStatusReturnsConfigParseErrorWhenYAMLIsInvalid(t *testing.T) {
 	homeDir := t.TempDir()
 	configHome := filepath.Join(homeDir, ".config")
+	projectDir := t.TempDir()
 	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
 	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
 	if err := os.WriteFile(configPath, []byte("root_directories: [oops\n"), 0o644); err != nil {
@@ -195,6 +313,7 @@ func TestStatusReturnsConfigParseErrorWhenYAMLIsInvalid(t *testing.T) {
 	}
 	t.Setenv("HOME", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", configHome)
+	withChdir(t, projectDir)
 
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"status"})
