@@ -94,6 +94,66 @@ func TestResolveUserConfigResolvesRootDirectories(t *testing.T) {
 	}
 }
 
+func TestResolveUserConfigResolvesWorkspaceGlobs(t *testing.T) {
+	configured := userConfig{
+		WorkspaceGlobs: []string{" apps/* ", "./services/*", ""},
+	}
+
+	resolved, err := resolveUserConfig(configured)
+	if err != nil {
+		t.Fatalf("resolve user config: %v", err)
+	}
+
+	expected := []string{"apps/*", "services/*"}
+	if len(resolved.WorkspaceGlobs) != len(expected) {
+		t.Fatalf("expected %d resolved workspace globs, got %d", len(expected), len(resolved.WorkspaceGlobs))
+	}
+	for i := range expected {
+		if resolved.WorkspaceGlobs[i] != expected[i] {
+			t.Fatalf("expected workspace_globs[%d] = %q, got %q", i, expected[i], resolved.WorkspaceGlobs[i])
+		}
+	}
+}
+
+func TestResolveUserConfigLeavesWorkspaceGlobsUnsetWhenMissing(t *testing.T) {
+	resolved, err := resolveUserConfig(userConfig{})
+	if err != nil {
+		t.Fatalf("resolve user config: %v", err)
+	}
+	if len(resolved.WorkspaceGlobs) != 0 {
+		t.Fatalf("expected workspace globs to remain unset, got %#v", resolved.WorkspaceGlobs)
+	}
+}
+
+func TestResolveUserConfigReturnsIndexErrorForInvalidWorkspaceGlobsEntry(t *testing.T) {
+	configured := userConfig{WorkspaceGlobs: []string{"apps/*", "../services/*"}}
+
+	_, err := resolveUserConfig(configured)
+	if err == nil {
+		t.Fatalf("expected resolve user config to fail")
+	}
+
+	if !strings.Contains(err.Error(), "failed to resolve workspace_globs[1]") {
+		t.Fatalf("expected indexed workspace_globs resolution error, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "must stay within the repository root") {
+		t.Fatalf("expected workspace_globs validation reason, got %q", err.Error())
+	}
+}
+
+func TestResolveUserConfigReturnsErrorForInvalidWorkspaceGlobPattern(t *testing.T) {
+	configured := userConfig{WorkspaceGlobs: []string{"apps/["}}
+
+	_, err := resolveUserConfig(configured)
+	if err == nil {
+		t.Fatalf("expected resolve user config to fail")
+	}
+
+	if !strings.Contains(err.Error(), "invalid glob pattern") {
+		t.Fatalf("expected invalid glob pattern error, got %q", err.Error())
+	}
+}
+
 func TestResolveUserConfigReturnsIndexErrorForInvalidRootDirectoriesEntry(t *testing.T) {
 	previousUserHomeDir := userHomeDir
 	previousCurrentUserHomeDir := currentUserHomeDir

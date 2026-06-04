@@ -15,6 +15,7 @@ const configFileName = "config.yaml"
 
 type userConfig struct {
 	RootDirectories []string `yaml:"root_directories"`
+	WorkspaceGlobs  []string `yaml:"workspace_globs"`
 	Quiet           *bool    `yaml:"quiet"`
 	AllowScripts    *bool    `yaml:"allow_scripts"`
 }
@@ -87,6 +88,21 @@ func resolveUserConfig(cfg userConfig) (userConfig, error) {
 		cfg.RootDirectories = resolvedDirectories
 	}
 
+	if len(cfg.WorkspaceGlobs) > 0 {
+		resolvedGlobs := make([]string, 0, len(cfg.WorkspaceGlobs))
+		for index, configuredGlob := range cfg.WorkspaceGlobs {
+			resolved, err := normalizeWorkspaceGlob(configuredGlob)
+			if err != nil {
+				return userConfig{}, fmt.Errorf("failed to resolve workspace_globs[%d]: %w", index, err)
+			}
+			if resolved == "" {
+				continue
+			}
+			resolvedGlobs = append(resolvedGlobs, resolved)
+		}
+		cfg.WorkspaceGlobs = resolvedGlobs
+	}
+
 	return cfg, nil
 }
 
@@ -132,6 +148,30 @@ func expandConfiguredDirectory(path string) (string, error) {
 	}
 
 	return resolveDirectory(trimmed), nil
+}
+
+func normalizeWorkspaceGlob(pattern string) (string, error) {
+	trimmed := strings.TrimSpace(pattern)
+	if trimmed == "" {
+		return "", nil
+	}
+
+	if _, err := filepath.Match(trimmed, ""); err != nil {
+		return "", fmt.Errorf("invalid glob pattern: %w", err)
+	}
+
+	normalized := filepath.Clean(trimmed)
+	if filepath.IsAbs(normalized) {
+		return "", fmt.Errorf("workspace glob must be relative")
+	}
+	if normalized == "." {
+		return "", fmt.Errorf("workspace glob must not match the repository root")
+	}
+	if normalized == ".." || strings.HasPrefix(normalized, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("workspace glob must stay within the repository root")
+	}
+
+	return normalized, nil
 }
 
 func isTopLevelDirectoryWithinRoot(path string, root string) bool {

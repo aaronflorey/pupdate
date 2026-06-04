@@ -15,7 +15,7 @@ func TestConfigShowsPathAndResolvedRootDirectories(t *testing.T) {
 	configHome := filepath.Join(homeDir, ".config")
 	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
 	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
-	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/src\nquiet: true\nallow_scripts: true\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/src\nworkspace_globs:\n  - ' apps/* '\n  - ./services/*\nquiet: true\nallow_scripts: true\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("HOME", homeDir)
@@ -49,6 +49,12 @@ func TestConfigShowsPathAndResolvedRootDirectories(t *testing.T) {
 	}
 	if !strings.Contains(out, "root_directories_resolved: "+expectedResolvedRoot) {
 		t.Fatalf("expected resolved root_directories in output, got %q", out)
+	}
+	if !strings.Contains(out, "workspace_globs:  apps/* , ./services/*") {
+		t.Fatalf("expected raw workspace_globs in output, got %q", out)
+	}
+	if !strings.Contains(out, "workspace_globs_resolved: apps/*, services/*") {
+		t.Fatalf("expected resolved workspace_globs in output, got %q", out)
 	}
 	if !strings.Contains(out, "quiet: true") {
 		t.Fatalf("expected quiet=true in output, got %q", out)
@@ -91,6 +97,12 @@ func TestConfigShowsUnsetValuesWhenConfigIsMissing(t *testing.T) {
 	if !strings.Contains(out, "root_directories_resolved: (not set)") {
 		t.Fatalf("expected unset resolved root_directories in output, got %q", out)
 	}
+	if !strings.Contains(out, "workspace_globs: (not set)") {
+		t.Fatalf("expected unset workspace_globs in output, got %q", out)
+	}
+	if !strings.Contains(out, "workspace_globs_resolved: (not set)") {
+		t.Fatalf("expected unset resolved workspace_globs in output, got %q", out)
+	}
 	if !strings.Contains(out, "quiet: (not set)") {
 		t.Fatalf("expected unset quiet in output, got %q", out)
 	}
@@ -128,6 +140,31 @@ func TestConfigReturnsParseErrorWhenYAMLIsInvalid(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to parse "+configPath) {
 		t.Fatalf("expected parse error with config path, got %q", err.Error())
+	}
+}
+
+func TestConfigReturnsWorkspaceGlobValidationError(t *testing.T) {
+	homeDir := t.TempDir()
+	configHome := filepath.Join(homeDir, ".config")
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	if err := os.WriteFile(configPath, []byte("workspace_globs:\n  - ../apps/*\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"config"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected config command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to resolve workspace_globs[0]") {
+		t.Fatalf("expected workspace_globs validation error, got %q", err.Error())
 	}
 }
 
