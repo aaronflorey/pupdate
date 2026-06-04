@@ -125,6 +125,37 @@ func TestResolveUserConfigLeavesWorkspaceGlobsUnsetWhenMissing(t *testing.T) {
 	}
 }
 
+func TestResolveUserConfigResolvesFolderBlacklist(t *testing.T) {
+	configured := userConfig{
+		FolderBlacklist: []string{" node_modules ", "vendor", ""},
+	}
+
+	resolved, err := resolveUserConfig(configured)
+	if err != nil {
+		t.Fatalf("resolve user config: %v", err)
+	}
+
+	expected := []string{"node_modules", "vendor"}
+	if len(resolved.FolderBlacklist) != len(expected) {
+		t.Fatalf("expected %d resolved folder blacklist entries, got %d", len(expected), len(resolved.FolderBlacklist))
+	}
+	for i := range expected {
+		if resolved.FolderBlacklist[i] != expected[i] {
+			t.Fatalf("expected folder_blacklist[%d] = %q, got %q", i, expected[i], resolved.FolderBlacklist[i])
+		}
+	}
+}
+
+func TestResolveUserConfigLeavesFolderBlacklistUnsetWhenMissing(t *testing.T) {
+	resolved, err := resolveUserConfig(userConfig{})
+	if err != nil {
+		t.Fatalf("resolve user config: %v", err)
+	}
+	if len(resolved.FolderBlacklist) != 0 {
+		t.Fatalf("expected folder blacklist to remain unset, got %#v", resolved.FolderBlacklist)
+	}
+}
+
 func TestResolveUserConfigReturnsIndexErrorForInvalidWorkspaceGlobsEntry(t *testing.T) {
 	configured := userConfig{WorkspaceGlobs: []string{"apps/*", "../services/*"}}
 
@@ -151,6 +182,48 @@ func TestResolveUserConfigReturnsErrorForInvalidWorkspaceGlobPattern(t *testing.
 
 	if !strings.Contains(err.Error(), "invalid glob pattern") {
 		t.Fatalf("expected invalid glob pattern error, got %q", err.Error())
+	}
+}
+
+func TestResolveUserConfigReturnsIndexErrorForInvalidFolderBlacklistEntry(t *testing.T) {
+	configured := userConfig{FolderBlacklist: []string{"vendor", "foo/bar"}}
+
+	_, err := resolveUserConfig(configured)
+	if err == nil {
+		t.Fatalf("expected resolve user config to fail")
+	}
+
+	if !strings.Contains(err.Error(), "failed to resolve folder_blacklist[1]") {
+		t.Fatalf("expected indexed folder_blacklist resolution error, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "exact directory name, not a path") {
+		t.Fatalf("expected folder_blacklist path validation reason, got %q", err.Error())
+	}
+}
+
+func TestResolveUserConfigReturnsErrorForBackslashSeparatedFolderBlacklistEntry(t *testing.T) {
+	configured := userConfig{FolderBlacklist: []string{`foo\bar`}}
+
+	_, err := resolveUserConfig(configured)
+	if err == nil {
+		t.Fatalf("expected resolve user config to fail")
+	}
+
+	if !strings.Contains(err.Error(), "exact directory name, not a path") {
+		t.Fatalf("expected folder_blacklist backslash path validation error, got %q", err.Error())
+	}
+}
+
+func TestResolveUserConfigReturnsErrorForGlobFolderBlacklistEntry(t *testing.T) {
+	configured := userConfig{FolderBlacklist: []string{"build*"}}
+
+	_, err := resolveUserConfig(configured)
+	if err == nil {
+		t.Fatalf("expected resolve user config to fail")
+	}
+
+	if !strings.Contains(err.Error(), "exact directory name, not a glob") {
+		t.Fatalf("expected folder_blacklist glob validation error, got %q", err.Error())
 	}
 }
 

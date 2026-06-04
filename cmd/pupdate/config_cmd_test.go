@@ -15,7 +15,7 @@ func TestConfigShowsPathAndResolvedRootDirectories(t *testing.T) {
 	configHome := filepath.Join(homeDir, ".config")
 	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
 	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
-	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/src\nworkspace_globs:\n  - ' apps/* '\n  - ./services/*\nquiet: true\nallow_scripts: true\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/src\nworkspace_globs:\n  - ' apps/* '\n  - ./services/*\nfolder_blacklist:\n  - ' node_modules '\n  - vendor\nquiet: true\nallow_scripts: true\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("HOME", homeDir)
@@ -55,6 +55,12 @@ func TestConfigShowsPathAndResolvedRootDirectories(t *testing.T) {
 	}
 	if !strings.Contains(out, "workspace_globs_resolved: apps/*, services/*") {
 		t.Fatalf("expected resolved workspace_globs in output, got %q", out)
+	}
+	if !strings.Contains(out, "folder_blacklist:  node_modules , vendor") {
+		t.Fatalf("expected raw folder_blacklist in output, got %q", out)
+	}
+	if !strings.Contains(out, "folder_blacklist_resolved: node_modules, vendor") {
+		t.Fatalf("expected resolved folder_blacklist in output, got %q", out)
 	}
 	if !strings.Contains(out, "quiet: true") {
 		t.Fatalf("expected quiet=true in output, got %q", out)
@@ -102,6 +108,12 @@ func TestConfigShowsUnsetValuesWhenConfigIsMissing(t *testing.T) {
 	}
 	if !strings.Contains(out, "workspace_globs_resolved: (not set)") {
 		t.Fatalf("expected unset resolved workspace_globs in output, got %q", out)
+	}
+	if !strings.Contains(out, "folder_blacklist: (not set)") {
+		t.Fatalf("expected unset folder_blacklist in output, got %q", out)
+	}
+	if !strings.Contains(out, "folder_blacklist_resolved: (not set)") {
+		t.Fatalf("expected unset resolved folder_blacklist in output, got %q", out)
 	}
 	if !strings.Contains(out, "quiet: (not set)") {
 		t.Fatalf("expected unset quiet in output, got %q", out)
@@ -165,6 +177,34 @@ func TestConfigReturnsWorkspaceGlobValidationError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to resolve workspace_globs[0]") {
 		t.Fatalf("expected workspace_globs validation error, got %q", err.Error())
+	}
+}
+
+func TestConfigReturnsFolderBlacklistValidationError(t *testing.T) {
+	homeDir := t.TempDir()
+	configHome := filepath.Join(homeDir, ".config")
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	if err := os.WriteFile(configPath, []byte("folder_blacklist:\n  - foo/bar\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"config"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected config command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to resolve folder_blacklist[0]") {
+		t.Fatalf("expected folder_blacklist validation error, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "exact directory name, not a path") {
+		t.Fatalf("expected folder_blacklist validation reason, got %q", err.Error())
 	}
 }
 

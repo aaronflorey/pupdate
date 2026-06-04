@@ -36,13 +36,15 @@ func newConfigCmd() *cobra.Command {
 				return err
 			}
 
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "path: %s\nexists: %t\nroot_directories: %s\nroot_directories_resolved: %s\nworkspace_globs: %s\nworkspace_globs_resolved: %s\nquiet: %s\nallow_scripts: %s\n",
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "path: %s\nexists: %t\nroot_directories: %s\nroot_directories_resolved: %s\nworkspace_globs: %s\nworkspace_globs_resolved: %s\nfolder_blacklist: %s\nfolder_blacklist_resolved: %s\nquiet: %s\nallow_scripts: %s\n",
 				path,
 				exists,
 				displayConfigValues(rawConfig.RootDirectories),
 				displayConfigValues(resolvedConfig.RootDirectories),
 				displayConfigValues(rawConfig.WorkspaceGlobs),
 				displayConfigValues(resolvedConfig.WorkspaceGlobs),
+				displayConfigValues(rawConfig.FolderBlacklist),
+				displayConfigValues(resolvedConfig.FolderBlacklist),
 				displayOptionalBool(rawConfig.Quiet),
 				displayOptionalBool(rawConfig.AllowScripts),
 			)

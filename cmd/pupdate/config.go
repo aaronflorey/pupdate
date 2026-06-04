@@ -16,6 +16,7 @@ const configFileName = "config.yaml"
 type userConfig struct {
 	RootDirectories []string `yaml:"root_directories"`
 	WorkspaceGlobs  []string `yaml:"workspace_globs"`
+	FolderBlacklist []string `yaml:"folder_blacklist"`
 	Quiet           *bool    `yaml:"quiet"`
 	AllowScripts    *bool    `yaml:"allow_scripts"`
 }
@@ -103,6 +104,21 @@ func resolveUserConfig(cfg userConfig) (userConfig, error) {
 		cfg.WorkspaceGlobs = resolvedGlobs
 	}
 
+	if len(cfg.FolderBlacklist) > 0 {
+		resolvedEntries := make([]string, 0, len(cfg.FolderBlacklist))
+		for index, configuredEntry := range cfg.FolderBlacklist {
+			resolved, err := normalizeFolderBlacklistEntry(configuredEntry)
+			if err != nil {
+				return userConfig{}, fmt.Errorf("failed to resolve folder_blacklist[%d]: %w", index, err)
+			}
+			if resolved == "" {
+				continue
+			}
+			resolvedEntries = append(resolvedEntries, resolved)
+		}
+		cfg.FolderBlacklist = resolvedEntries
+	}
+
 	return cfg, nil
 }
 
@@ -172,6 +188,23 @@ func normalizeWorkspaceGlob(pattern string) (string, error) {
 	}
 
 	return normalized, nil
+}
+
+func normalizeFolderBlacklistEntry(name string) (string, error) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return "", nil
+	}
+
+	if strings.ContainsAny(trimmed, `*?[]`) {
+		return "", fmt.Errorf("folder blacklist entry must be an exact directory name, not a glob")
+	}
+
+	if trimmed == "." || trimmed == ".." || strings.Contains(trimmed, "/") || strings.Contains(trimmed, `\`) {
+		return "", fmt.Errorf("folder blacklist entry must be an exact directory name, not a path")
+	}
+
+	return trimmed, nil
 }
 
 func isTopLevelDirectoryWithinRoot(path string, root string) bool {
