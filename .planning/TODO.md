@@ -15,7 +15,7 @@ Current TODO: none
 
 Next recommended TODO: P2-T1
 
-Last update: 2026-05-22
+Last update: 2026-06-04
 
 ## Operating Rules
 
@@ -46,9 +46,12 @@ Last update: 2026-05-22
 | P2-T2 | pending | Add action-oriented remediation guidance to `pupdate status` for the blocked states already detected by the shared preflight flow. | `.planning/todos/P2-T2.md` | `go test ./cmd/pupdate -count=1` |
 | P2-R1 | pending | Review the shared preflight and status-guidance phase for behavior drift, scope creep, and missing regression coverage. | `.planning/todos/P2-R1.md` | Review `cmd/pupdate` diffs and rerun `go test ./cmd/pupdate -count=1`. |
 | P3-T1 | pending | Define validated `workspace_globs` config support and surface it through `pupdate config`. | `.planning/todos/P3-T1.md` | `go test ./cmd/pupdate -count=1` |
+| P3-T4 | pending | Define validated folder blacklist config support for exact directory-name matches and surface it through `pupdate config`. | `.planning/todos/P3-T4.md` | `go test ./cmd/pupdate -count=1` |
 | P3-T2 | pending | Apply `workspace_globs` during detection while keeping the current shallow default scan unchanged. | `.planning/todos/P3-T2.md` | `go test ./internal/detection ./cmd/pupdate -count=1` and benchmark guardrail inspection. |
+| P3-T5 | pending | Apply the folder blacklist across all detection paths, including the default shallow scan and configured workspace expansions. | `.planning/todos/P3-T5.md` | `go test ./internal/detection ./cmd/pupdate -count=1` and benchmark guardrail inspection. |
 | P3-T3 | pending | Document `workspace_globs` behavior, defaults, and examples in the README. | `.planning/todos/P3-T3.md` | Manual inspection of README examples and config docs. |
-| P3-R1 | pending | Review the monorepo-detection phase against the latency and low-surprise constraints. | `.planning/todos/P3-R1.md` | Review diffs and rerun the listed detection/config checks. |
+| P3-T6 | pending | Document the folder blacklist behavior, exact-match semantics, and examples in the README. | `.planning/todos/P3-T6.md` | Manual inspection of README config docs and examples. |
+| P3-R1 | pending | Review the monorepo-detection phase against the latency, exclusion, and low-surprise constraints. | `.planning/todos/P3-R1.md` | Review diffs and rerun the listed detection/config checks. |
 | P4-T1 | pending | Expand the README install section to support Homebrew and `go install` alongside the existing `bin` workflow. | `.planning/todos/P4-T1.md` | Manual inspection of README install steps against release config. |
 | P4-T2 | pending | Pin the development Go version in `mise.toml` to match `go.mod` and contributor guidance. | `.planning/todos/P4-T2.md` | Manual inspection of `mise.toml`, `go.mod`, and contributing docs. |
 | P4-T3 | pending | Add a focused CLI integration test layer for `run`, `status`, `init`, and async hook lock lifecycle behavior. | `.planning/todos/P4-T3.md` | `go test ./... -count=1` |
@@ -63,8 +66,11 @@ Last update: 2026-05-22
 - `P2-T2`: `.planning/todos/P2-T2.md`
 - `P2-R1`: `.planning/todos/P2-R1.md`
 - `P3-T1`: `.planning/todos/P3-T1.md`
+- `P3-T4`: `.planning/todos/P3-T4.md`
 - `P3-T2`: `.planning/todos/P3-T2.md`
+- `P3-T5`: `.planning/todos/P3-T5.md`
 - `P3-T3`: `.planning/todos/P3-T3.md`
+- `P3-T6`: `.planning/todos/P3-T6.md`
 - `P3-R1`: `.planning/todos/P3-R1.md`
 - `P4-T1`: `.planning/todos/P4-T1.md`
 - `P4-T2`: `.planning/todos/P4-T2.md`
