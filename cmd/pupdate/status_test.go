@@ -31,11 +31,11 @@ func TestStatusShowsReadyTarget(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 
 	t.Cleanup(func() {
-		detectFn = detection.DetectWithWorkspaceGlobs
+		detectFn = detection.DetectWithOptions
 		evaluateFreshnessFn = freshness.Evaluate
 		lookPath = exec.LookPath
 	})
-	detectFn = func(string, []string) ([]detection.DetectionResult, error) {
+	detectFn = func(string, detection.Options) ([]detection.DetectionResult, error) {
 		return []detection.DetectionResult{{
 			Ecosystem:    detection.EcosystemNode,
 			Managers:     []string{"bun"},
@@ -126,10 +126,10 @@ func TestStatusShowsRepoSkipForHomeDirectory(t *testing.T) {
 	detectCalls := 0
 	freshnessCalls := 0
 	t.Cleanup(func() {
-		detectFn = detection.DetectWithWorkspaceGlobs
+		detectFn = detection.DetectWithOptions
 		evaluateFreshnessFn = freshness.Evaluate
 	})
-	detectFn = func(string, []string) ([]detection.DetectionResult, error) {
+	detectFn = func(string, detection.Options) ([]detection.DetectionResult, error) {
 		detectCalls++
 		return nil, errors.New("detect should not run")
 	}
@@ -183,9 +183,9 @@ func TestStatusShowsRepoSkipForPupIgnore(t *testing.T) {
 
 	detectCalls := 0
 	t.Cleanup(func() {
-		detectFn = detection.DetectWithWorkspaceGlobs
+		detectFn = detection.DetectWithOptions
 	})
-	detectFn = func(string, []string) ([]detection.DetectionResult, error) {
+	detectFn = func(string, detection.Options) ([]detection.DetectionResult, error) {
 		detectCalls++
 		return nil, errors.New("detect should not run")
 	}
@@ -240,10 +240,10 @@ func TestStatusShowsRepoSkipOutsideConfiguredRootDirectories(t *testing.T) {
 	detectCalls := 0
 	freshnessCalls := 0
 	t.Cleanup(func() {
-		detectFn = detection.DetectWithWorkspaceGlobs
+		detectFn = detection.DetectWithOptions
 		evaluateFreshnessFn = freshness.Evaluate
 	})
-	detectFn = func(string, []string) ([]detection.DetectionResult, error) {
+	detectFn = func(string, detection.Options) ([]detection.DetectionResult, error) {
 		detectCalls++
 		return nil, errors.New("detect should not run")
 	}
@@ -287,27 +287,30 @@ func TestStatusShowsRepoSkipOutsideConfiguredRootDirectories(t *testing.T) {
 	}
 }
 
-func TestStatusPassesResolvedWorkspaceGlobsToDetection(t *testing.T) {
+func TestStatusPassesResolvedDetectionOptionsToDetection(t *testing.T) {
 	dir := t.TempDir()
 	configHome := t.TempDir()
 	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
 	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
-	if err := os.WriteFile(configPath, []byte("workspace_globs:\n  - ' apps/* '\n  - ./services/*\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("workspace_globs:\n  - ' apps/* '\n  - ./services/*\nfolder_blacklist:\n  - ' blah '\n  - vendor\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	withChdir(t, dir)
 
 	t.Cleanup(func() {
-		detectFn = detection.DetectWithWorkspaceGlobs
+		detectFn = detection.DetectWithOptions
 		evaluateFreshnessFn = freshness.Evaluate
 	})
 
 	var gotDir string
-	var gotGlobs []string
-	detectFn = func(dir string, workspaceGlobs []string) ([]detection.DetectionResult, error) {
+	var gotOptions detection.Options
+	detectFn = func(dir string, options detection.Options) ([]detection.DetectionResult, error) {
 		gotDir = dir
-		gotGlobs = append([]string(nil), workspaceGlobs...)
+		gotOptions = detection.Options{
+			WorkspaceGlobs:  append([]string(nil), options.WorkspaceGlobs...),
+			FolderBlacklist: append([]string(nil), options.FolderBlacklist...),
+		}
 		return nil, nil
 	}
 	evaluateFreshnessFn = func(string, []detection.DetectionResult, state.FileState) ([]freshness.EcosystemDecision, error) {
@@ -328,8 +331,11 @@ func TestStatusPassesResolvedWorkspaceGlobsToDetection(t *testing.T) {
 	if gotDir != "." {
 		t.Fatalf("expected detectFn dir to be '.', got %q", gotDir)
 	}
-	if !slices.Equal(gotGlobs, []string{"apps/*", "services/*"}) {
-		t.Fatalf("expected resolved workspace globs, got %#v", gotGlobs)
+	if !slices.Equal(gotOptions.WorkspaceGlobs, []string{"apps/*", "services/*"}) {
+		t.Fatalf("expected resolved workspace globs, got %#v", gotOptions.WorkspaceGlobs)
+	}
+	if !slices.Equal(gotOptions.FolderBlacklist, []string{"blah", "vendor"}) {
+		t.Fatalf("expected resolved folder blacklist, got %#v", gotOptions.FolderBlacklist)
 	}
 	if !strings.Contains(stdout.String(), "run_status: idle") {
 		t.Fatalf("expected idle status when detector returns nothing, got %q", stdout.String())
@@ -406,11 +412,11 @@ func TestStatusShowsBlockedTargetWhenManagerMissing(t *testing.T) {
 	withChdir(t, dir)
 
 	t.Cleanup(func() {
-		detectFn = detection.DetectWithWorkspaceGlobs
+		detectFn = detection.DetectWithOptions
 		evaluateFreshnessFn = freshness.Evaluate
 		lookPath = exec.LookPath
 	})
-	detectFn = func(string, []string) ([]detection.DetectionResult, error) {
+	detectFn = func(string, detection.Options) ([]detection.DetectionResult, error) {
 		return []detection.DetectionResult{{
 			Ecosystem:    detection.EcosystemNode,
 			Managers:     []string{"bun"},

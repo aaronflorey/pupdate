@@ -35,6 +35,15 @@ func assertHasFile(t *testing.T, files []string, file string) {
 	}
 }
 
+func assertDoesNotContainEcosystemDirectory(t *testing.T, results []DetectionResult, ecosystem Ecosystem, directory string) {
+	t.Helper()
+	for _, result := range results {
+		if result.Ecosystem == ecosystem && result.Directory == directory {
+			t.Fatalf("expected no %q detection in %q, got %#v", ecosystem, directory, result)
+		}
+	}
+}
+
 func assertHasWarning(t *testing.T, warnings []Warning, code WarningCode) {
 	t.Helper()
 	for _, warning := range warnings {
@@ -406,6 +415,51 @@ func TestDetectIncludesPackagesChildren(t *testing.T) {
 	assertHasFile(t, node.MatchedFiles, "packages/web/package-lock.json")
 }
 
+func TestDetectWithOptionsSkipsBlacklistedDefaultDirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "blah"), 0o755); err != nil {
+		t.Fatalf("mkdir blah: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "frontend"), 0o755); err != nil {
+		t.Fatalf("mkdir frontend: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "packages", "blah"), 0o755); err != nil {
+		t.Fatalf("mkdir packages/blah: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "packages", "active"), 0o755); err != nil {
+		t.Fatalf("mkdir packages/active: %v", err)
+	}
+
+	writeFiles(t, filepath.Join(dir, "blah"), "package-lock.json")
+	writeFiles(t, filepath.Join(dir, "frontend"), "composer.lock")
+	writeFiles(t, filepath.Join(dir, "packages", "blah"), "bun.lock")
+	writeFiles(t, filepath.Join(dir, "packages", "active"), "go.mod")
+
+	results, err := DetectWithOptions(dir, Options{FolderBlacklist: []string{"blah"}})
+	if err != nil {
+		t.Fatalf("DetectWithOptions returned error: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Fatalf("expected only non-blacklisted detections, got %#v", results)
+	}
+
+	php := assertContainsEcosystem(t, results, EcosystemPHP)
+	if php.Directory != "frontend" {
+		t.Fatalf("expected frontend directory for php detection, got %q", php.Directory)
+	}
+	assertHasFile(t, php.MatchedFiles, "frontend/composer.lock")
+
+	goResult := assertContainsEcosystem(t, results, EcosystemGo)
+	if goResult.Directory != "packages/active" {
+		t.Fatalf("expected packages/active directory for go detection, got %q", goResult.Directory)
+	}
+	assertHasFile(t, goResult.MatchedFiles, "packages/active/go.mod")
+
+	assertDoesNotContainEcosystemDirectory(t, results, EcosystemNode, "blah")
+	assertDoesNotContainEcosystemDirectory(t, results, EcosystemNode, "packages/blah")
+}
+
 func TestDetectDoesNotScanPastPackagesChildren(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "packages", "group", "web"), 0o755); err != nil {
@@ -486,4 +540,35 @@ func TestDetectWithWorkspaceGlobsSkipsGitignoredMatches(t *testing.T) {
 		t.Fatalf("expected apps/active directory for php detection, got %q", php.Directory)
 	}
 	assertHasFile(t, php.MatchedFiles, "apps/active/composer.lock")
+}
+
+func TestDetectWithOptionsSkipsBlacklistedNestedWorkspaceDirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "foo", "blah", "web"), 0o755); err != nil {
+		t.Fatalf("mkdir foo/blah/web: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "foo", "keep", "api"), 0o755); err != nil {
+		t.Fatalf("mkdir foo/keep/api: %v", err)
+	}
+	writeFiles(t, filepath.Join(dir, "foo", "blah", "web"), "package-lock.json")
+	writeFiles(t, filepath.Join(dir, "foo", "keep", "api"), "composer.lock")
+
+	results, err := DetectWithOptions(dir, Options{
+		WorkspaceGlobs:  []string{"foo/*/*"},
+		FolderBlacklist: []string{"blah"},
+	})
+	if err != nil {
+		t.Fatalf("DetectWithOptions returned error: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected only non-blacklisted nested workspace detection, got %#v", results)
+	}
+
+	php := assertContainsEcosystem(t, results, EcosystemPHP)
+	if php.Directory != "foo/keep/api" {
+		t.Fatalf("expected foo/keep/api directory for php detection, got %q", php.Directory)
+	}
+	assertHasFile(t, php.MatchedFiles, "foo/keep/api/composer.lock")
+	assertDoesNotContainEcosystemDirectory(t, results, EcosystemNode, "foo/blah/web")
 }

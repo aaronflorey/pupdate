@@ -93,7 +93,10 @@ func collectPreflight(options preflightOptions) (preflightResult, error) {
 		return result, nil
 	}
 
-	results, err := detectFn(".", resolvedConfig.WorkspaceGlobs)
+	results, err := detectFn(".", detection.Options{
+		WorkspaceGlobs:  resolvedConfig.WorkspaceGlobs,
+		FolderBlacklist: resolvedConfig.FolderBlacklist,
+	})
 	if err != nil {
 		return preflightResult{}, fmt.Errorf("detection failed: %w", err)
 	}

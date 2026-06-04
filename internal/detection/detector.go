@@ -14,12 +14,21 @@ type ignoreMatcher interface {
 	Match(path []string, isDir bool) bool
 }
 
+type Options struct {
+	WorkspaceGlobs  []string
+	FolderBlacklist []string
+}
+
 func Detect(dir string) ([]DetectionResult, error) {
-	return DetectWithWorkspaceGlobs(dir, nil)
+	return DetectWithOptions(dir, Options{})
 }
 
 func DetectWithWorkspaceGlobs(dir string, workspaceGlobs []string) ([]DetectionResult, error) {
-	directories, err := scanDirectories(dir, workspaceGlobs)
+	return DetectWithOptions(dir, Options{WorkspaceGlobs: workspaceGlobs})
+}
+
+func DetectWithOptions(dir string, options Options) ([]DetectionResult, error) {
+	directories, err := scanDirectories(dir, options)
 	if err != nil {
 		return nil, err
 	}
@@ -41,11 +50,13 @@ func DetectWithWorkspaceGlobs(dir string, workspaceGlobs []string) ([]DetectionR
 	return results, nil
 }
 
-func scanDirectories(dir string, workspaceGlobs []string) ([]string, error) {
+func scanDirectories(dir string, options Options) ([]string, error) {
 	matcher, err := loadIgnoreMatcher(dir)
 	if err != nil {
 		return nil, err
 	}
+
+	folderBlacklist := makeFolderBlacklistSet(options.FolderBlacklist)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -60,7 +71,7 @@ func scanDirectories(dir string, workspaceGlobs []string) ([]string, error) {
 		}
 
 		relPath := entry.Name()
-		if shouldSkipDirectory(matcher, relPath) {
+		if shouldSkipDirectory(matcher, folderBlacklist, relPath) {
 			continue
 		}
 
@@ -81,7 +92,7 @@ func scanDirectories(dir string, workspaceGlobs []string) ([]string, error) {
 			}
 
 			packagePath := filepath.ToSlash(filepath.Join(relPath, packageEntry.Name()))
-			if shouldSkipDirectory(matcher, packagePath) {
+			if shouldSkipDirectory(matcher, folderBlacklist, packagePath) {
 				continue
 			}
 
@@ -89,8 +100,8 @@ func scanDirectories(dir string, workspaceGlobs []string) ([]string, error) {
 		}
 	}
 
-	for _, workspaceGlob := range workspaceGlobs {
-		matchedDirectories, err := scanWorkspaceGlob(dir, matcher, workspaceGlob)
+	for _, workspaceGlob := range options.WorkspaceGlobs {
+		matchedDirectories, err := scanWorkspaceGlob(dir, matcher, folderBlacklist, workspaceGlob)
 		if err != nil {
 			return nil, err
 		}
@@ -112,32 +123,72 @@ func appendDirectory(directories []string, seen map[string]struct{}, relPath str
 	return append(directories, relPath)
 }
 
-func scanWorkspaceGlob(dir string, matcher ignoreMatcher, workspaceGlob string) ([]string, error) {
-	matches, err := filepath.Glob(filepath.Join(dir, filepath.FromSlash(workspaceGlob)))
-	if err != nil {
-		return nil, err
+func makeFolderBlacklistSet(entries []string) map[string]struct{} {
+	if len(entries) == 0 {
+		return nil
 	}
 
-	directories := make([]string, 0, len(matches))
-	for _, match := range matches {
-		info, err := os.Lstat(match)
-		if err != nil {
-			return nil, err
-		}
-		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			continue
+	set := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		set[entry] = struct{}{}
+	}
+	return set
+}
+
+func scanWorkspaceGlob(dir string, matcher ignoreMatcher, folderBlacklist map[string]struct{}, workspaceGlob string) ([]string, error) {
+	segments := strings.Split(filepath.ToSlash(workspaceGlob), "/")
+	directories := []string{}
+
+	var walk func(string, int) error
+	walk = func(relativeDir string, segmentIndex int) error {
+		if segmentIndex == len(segments) {
+			if relativeDir != "." {
+				directories = append(directories, relativeDir)
+			}
+			return nil
 		}
 
-		relPath, err := filepath.Rel(dir, match)
-		if err != nil {
-			return nil, err
-		}
-		relPath = filepath.ToSlash(relPath)
-		if relPath == "." || shouldSkipDirectory(matcher, relPath) {
-			continue
+		dirPath := dir
+		if relativeDir != "." {
+			dirPath = filepath.Join(dir, filepath.FromSlash(relativeDir))
 		}
 
-		directories = append(directories, relPath)
+		entries, err := os.ReadDir(dirPath)
+		if err != nil {
+			return err
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() || (entry.Type()&os.ModeSymlink) != 0 {
+				continue
+			}
+
+			relPath := entry.Name()
+			if relativeDir != "." {
+				relPath = filepath.ToSlash(filepath.Join(relativeDir, entry.Name()))
+			}
+			if shouldSkipDirectory(matcher, folderBlacklist, relPath) {
+				continue
+			}
+
+			matched, err := filepath.Match(segments[segmentIndex], entry.Name())
+			if err != nil {
+				return err
+			}
+			if !matched {
+				continue
+			}
+
+			if err := walk(relPath, segmentIndex+1); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	if err := walk(".", 0); err != nil {
+		return nil, err
 	}
 
 	return directories, nil
@@ -170,13 +221,23 @@ func loadIgnoreMatcher(dir string) (ignoreMatcher, error) {
 	return gitignore.NewMatcher(patterns), nil
 }
 
-func shouldSkipDirectory(matcher ignoreMatcher, path string) bool {
-	if matcher == nil {
-		return false
+func shouldSkipDirectory(matcher ignoreMatcher, folderBlacklist map[string]struct{}, path string) bool {
+	if folderBlacklist != nil {
+		normalizedPath := filepath.ToSlash(path)
+		directoryName := normalizedPath[strings.LastIndex(normalizedPath, "/")+1:]
+		if _, ok := folderBlacklist[directoryName]; ok {
+			return true
+		}
 	}
 
-	parts := strings.Split(filepath.ToSlash(path), "/")
-	return matcher.Match(parts, true)
+	if matcher != nil {
+		parts := strings.Split(filepath.ToSlash(path), "/")
+		if matcher.Match(parts, true) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func detectDirectory(dirPath string, relativeDir string) ([]DetectionResult, error) {
