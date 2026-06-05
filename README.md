@@ -20,6 +20,20 @@ its existing traversal limits, local state flow, and safe default behavior.
 
 ## Install
 
+Homebrew:
+
+```bash
+brew install aaronflorey/tap/pupdate
+```
+
+Go toolchain:
+
+```bash
+go install github.com/aaronflorey/pupdate/cmd/pupdate@latest
+```
+
+[`bin`](https://github.com/aaronflorey/bin):
+
 ```bash
 bin install github.com/aaronflorey/pupdate
 ```
