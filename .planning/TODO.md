@@ -13,9 +13,9 @@ This file is the queue and status tracker for the `.planning/update.md` improvem
 
 Current TODO: none
 
-Next recommended TODO: P3-T6
+Next recommended TODO: P3-R1
 
-Last update: 2026-06-04
+Last update: 2026-06-05
 
 ## Operating Rules
 
@@ -50,7 +50,7 @@ Last update: 2026-06-04
 | P3-T2 | complete | Apply `workspace_globs` during detection while keeping the current shallow default scan unchanged. | `.planning/todos/P3-T2.md` | `go test ./internal/detection ./cmd/pupdate -count=1` and benchmark guardrail inspection. |
 | P3-T5 | complete | Apply the folder blacklist across all detection paths, including the default shallow scan and configured workspace expansions. | `.planning/todos/P3-T5.md` | `go test ./internal/detection ./cmd/pupdate -count=1` and benchmark guardrail inspection. |
 | P3-T3 | complete | Document `workspace_globs` behavior, defaults, and examples in the README. | `.planning/todos/P3-T3.md` | Manual inspection of README examples and config docs. |
-| P3-T6 | pending | Document the folder blacklist behavior, exact-match semantics, and examples in the README. | `.planning/todos/P3-T6.md` | Manual inspection of README config docs and examples. |
+| P3-T6 | complete | Document the folder blacklist behavior, exact-match semantics, and examples in the README. | `.planning/todos/P3-T6.md` | Manual inspection of README config docs and examples. |
 | P3-R1 | pending | Review the monorepo-detection phase against the latency, exclusion, and low-surprise constraints. | `.planning/todos/P3-R1.md` | Review diffs and rerun the listed detection/config checks. |
 | P4-T1 | pending | Expand the README install section to support Homebrew and `go install` alongside the existing `bin` workflow. | `.planning/todos/P4-T1.md` | Manual inspection of README install steps against release config. |
 | P4-T2 | pending | Pin the development Go version in `mise.toml` to match `go.mod` and contributor guidance. | `.planning/todos/P4-T2.md` | Manual inspection of `mise.toml`, `go.mod`, and contributing docs. |

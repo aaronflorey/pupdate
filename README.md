@@ -140,9 +140,10 @@ User config:
 - `~/.config/pupdate/config.yaml`
 - `root_directories:` with one or more paths (for example `~/code`): only run when the current working directory is a direct child of one of those roots; `~` expands to the user's home directory
 - `workspace_globs:` with one or more repo-relative directory globs (for example `apps/*` or `services/*`): opt in to scanning additional workspace directories that match those patterns
+- `folder_blacklist:` with one or more exact directory names (for example `blah` or `vendor`): skip traversing any matching directory name during detection, both in the default shallow scan and while expanding `workspace_globs`
 - `quiet: true|false`: set the default `run` quiet mode without needing `--quiet` in shell aliases or wrappers
 - `allow_scripts: true|false`: set the default lifecycle-script policy for `run`; explicit command flags still win
-- when missing, `pupdate run` and `pupdate config` use implicit defaults (`root_directories: []`, `workspace_globs: []`) without creating the config directory or writing `config.yaml`
+- when missing, `pupdate run` and `pupdate config` use implicit defaults (`root_directories: []`, `workspace_globs: []`, `folder_blacklist: []`) without creating the config directory or writing `config.yaml`
 
 `workspace_globs` is optional and does not change the default traversal unless you
 set it. Without any configured globs, `pupdate` still scans only the repository
@@ -161,6 +162,28 @@ Each glob is matched relative to the repository root, so the example above adds
 directories like `apps/web` and `services/api`. Matches add those exact
 workspace directories to the scan; `pupdate` does not continue scanning deeper
 nested directories under each match unless another configured glob matches them.
+
+`folder_blacklist` is also optional. Each entry must be an exact directory name,
+not a path like `foo/blah` and not a glob like `blah*`. A blacklist entry such
+as `blah` skips traversal into any directory named `blah`, so it excludes both
+`./blah` from the default shallow scan and nested paths like `./foo/blah` when a
+configured workspace glob would otherwise reach them.
+
+Example config for a monorepo that expands into workspaces but skips known
+directory names anywhere they appear during traversal:
+
+```yaml
+workspace_globs:
+  - apps/*
+  - foo/*/*
+folder_blacklist:
+  - blah
+  - vendor
+```
+
+`folder_blacklist` only skips matching subdirectories during traversal. It does
+not disable the whole repository. `.pupignore` is broader: it short-circuits the
+entire repo before detection, freshness checks, and installs.
 
 ### `pupdate init`
 
@@ -183,6 +206,7 @@ Output includes:
 - the configured `root_directories` values from the file
 - the resolved `root_directories` values after `~` expansion and path normalization
 - the configured and resolved `workspace_globs` values
+- the configured and resolved `folder_blacklist` values
 - the configured `quiet` and `allow_scripts` values when set
 
 ### `pupdate status`
@@ -203,9 +227,11 @@ Output includes:
 ## How It Works
 
 1. `pupdate run` scans the current directory, other depth-1 subdirectories, and
-   direct children of `packages/` for known lockfiles and manifests. If you set
+ direct children of `packages/` for known lockfiles and manifests. If you set
    `workspace_globs`, it also scans matching repo-relative workspace directories
-   such as `apps/*` or `services/*`.
+   such as `apps/*` or `services/*`. If you set `folder_blacklist`, any
+   directory whose exact name matches an entry is skipped during both kinds of
+   traversal.
 2. It detects the matching ecosystem and package manager.
 3. It compares current file hashes against the local `.pupdate` state file using
    namespaced keys per ecosystem and directory.
