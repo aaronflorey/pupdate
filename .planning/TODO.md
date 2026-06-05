@@ -13,7 +13,7 @@ This file is the queue and status tracker for the `.planning/update.md` improvem
 
 Current TODO: none
 
-Next recommended TODO: P4-T2
+Next recommended TODO: P4-T3
 
 Last update: 2026-06-05
 
@@ -53,7 +53,7 @@ Last update: 2026-06-05
 | P3-T6 | complete | Document the folder blacklist behavior, exact-match semantics, and examples in the README. | `.planning/todos/P3-T6.md` | Manual inspection of README config docs and examples. |
 | P3-R1 | complete | Review the monorepo-detection phase against the latency, exclusion, and low-surprise constraints. | `.planning/todos/P3-R1.md` | Review diffs and rerun the listed detection/config checks. |
 | P4-T1 | complete | Expand the README install section to support Homebrew and `go install` alongside the existing `bin` workflow. | `.planning/todos/P4-T1.md` | Manual inspection of README install steps against release config. |
-| P4-T2 | pending | Pin the development Go version in `mise.toml` to match `go.mod` and contributor guidance. | `.planning/todos/P4-T2.md` | Manual inspection of `mise.toml`, `go.mod`, and contributing docs. |
+| P4-T2 | complete | Pin the development Go version in `mise.toml` to match `go.mod` and contributor guidance. | `.planning/todos/P4-T2.md` | Manual inspection of `mise.toml`, `go.mod`, and contributing docs. |
 | P4-T3 | pending | Add a focused CLI integration test layer for `run`, `status`, `init`, and async hook lock lifecycle behavior. | `.planning/todos/P4-T3.md` | `go test ./... -count=1` |
 | P4-R1 | pending | Review the installation, toolchain, and CLI integration-test phase for scope control and regression coverage. | `.planning/todos/P4-R1.md` | Review diffs and rerun `go test ./... -count=1`. |
 
