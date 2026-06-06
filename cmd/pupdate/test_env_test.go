@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"testing"
@@ -32,4 +33,19 @@ func runTestsWithIsolatedConfigHome(m *testing.M) int {
 	}()
 
 	return m.Run()
+}
+
+func executeRootCommand(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd := newRootCmd()
+	cmd.SetArgs(args)
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	err := cmd.Execute()
+	return stdout.String(), stderr.String(), err
 }
