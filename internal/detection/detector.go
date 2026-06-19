@@ -7,11 +7,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
+	gitignore "github.com/git-pkgs/gitignore"
 )
 
 type ignoreMatcher interface {
-	Match(path []string, isDir bool) bool
+	MatchPath(path string, isDir bool) bool
 }
 
 type Options struct {
@@ -204,21 +204,17 @@ func loadIgnoreMatcher(dir string) (ignoreMatcher, error) {
 		return nil, err
 	}
 
-	lines := strings.Split(string(raw), "\n")
-	patterns := make([]gitignore.Pattern, 0, len(lines))
-	for _, line := range lines {
-		line = strings.TrimSuffix(line, "\r")
-		if line == "" {
-			continue
-		}
-		patterns = append(patterns, gitignore.ParsePattern(line, nil))
+	matcher := gitignore.New("")
+	matcher.AddPatterns(raw, "")
+	if len(matcher.Errors()) != 0 {
+		// ponytail: keep current behavior and ignore invalid lines rather than failing detection.
 	}
 
-	if len(patterns) == 0 {
+	if len(raw) == 0 {
 		return nil, nil
 	}
 
-	return gitignore.NewMatcher(patterns), nil
+	return matcher, nil
 }
 
 func shouldSkipDirectory(matcher ignoreMatcher, folderBlacklist map[string]struct{}, path string) bool {
@@ -231,8 +227,7 @@ func shouldSkipDirectory(matcher ignoreMatcher, folderBlacklist map[string]struc
 	}
 
 	if matcher != nil {
-		parts := strings.Split(filepath.ToSlash(path), "/")
-		if matcher.Match(parts, true) {
+		if matcher.MatchPath(filepath.ToSlash(path), true) {
 			return true
 		}
 	}
