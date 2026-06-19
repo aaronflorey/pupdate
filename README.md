@@ -223,6 +223,11 @@ Output includes:
 - the configured and resolved `folder_blacklist` values
 - the configured `quiet` and `allow_scripts` values when set
 
+### `pupdate reset`
+
+Deletes the `.pupdate` state file in the current directory. The next `pupdate run`
+will treat all dependencies as stale and re-evaluate from scratch.
+
 ### `pupdate status`
 
 Prints a read-only diagnostic snapshot for the current directory so you can see
