@@ -2,9 +2,18 @@ package main
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// expectedHookInvocation returns the expected hook command prefix used in
+// generated snippets, i.e. the shell-quoted resolved executable path followed
+// by "hook".
+func expectedHookInvocation(t *testing.T) string {
+	t.Helper()
+	return shellQuote(resolvedExecutablePath()) + " hook"
+}
 
 func TestInitBashSnippetIncludesHookAndQuietRun(t *testing.T) {
 	var stdout bytes.Buffer
@@ -23,10 +32,10 @@ func TestInitBashSnippetIncludesHookAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "PROMPT_COMMAND") {
 		t.Fatalf("expected bash snippet to reference PROMPT_COMMAND, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate hook --quiet") {
-		t.Fatalf("expected bash snippet to invoke quiet hook, got %q", out)
+	if !strings.Contains(out, expectedHookInvocation(t)+" --quiet") {
+		t.Fatalf("expected bash snippet to invoke quiet hook with resolved path, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate hook --quiet --async") {
+	if !strings.Contains(out, expectedHookInvocation(t)+" --quiet --async") {
 		t.Fatalf("expected default bash snippet to use async mode, got %q", out)
 	}
 	if !strings.Contains(out, "[ \"$PWD\" != \"$HOME\" ]") {
@@ -54,10 +63,10 @@ func TestInitZshSnippetIncludesHooksAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "add-zsh-hook") {
 		t.Fatalf("expected zsh snippet to add zsh hooks, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate hook --quiet") {
-		t.Fatalf("expected zsh snippet to invoke quiet hook, got %q", out)
+	if !strings.Contains(out, expectedHookInvocation(t)+" --quiet") {
+		t.Fatalf("expected zsh snippet to invoke quiet hook with resolved path, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate hook --quiet --async") {
+	if !strings.Contains(out, expectedHookInvocation(t)+" --quiet --async") {
 		t.Fatalf("expected default zsh snippet to use async mode, got %q", out)
 	}
 	if !strings.Contains(out, "[ \"$PWD\" != \"$HOME\" ]") {
@@ -85,10 +94,10 @@ func TestInitFishSnippetIncludesHookAndQuietRun(t *testing.T) {
 	if !strings.Contains(out, "--on-variable PWD") {
 		t.Fatalf("expected fish snippet to use PWD variable hook, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate hook --quiet") {
-		t.Fatalf("expected fish snippet to invoke quiet hook, got %q", out)
+	if !strings.Contains(out, expectedHookInvocation(t)+" --quiet") {
+		t.Fatalf("expected fish snippet to invoke quiet hook with resolved path, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate hook --quiet --async") {
+	if !strings.Contains(out, expectedHookInvocation(t)+" --quiet --async") {
 		t.Fatalf("expected default fish snippet to use async mode, got %q", out)
 	}
 	if !strings.Contains(out, "test \"$PWD\" != \"$HOME\"") {
@@ -113,7 +122,7 @@ func TestInitAsyncModeUsesBackgroundHook(t *testing.T) {
 	}
 
 	out := stdout.String()
-	if !strings.Contains(out, "pupdate hook --quiet --async") {
+	if !strings.Contains(out, expectedHookInvocation(t)+" --quiet --async") {
 		t.Fatalf("expected async init mode to launch background hook, got %q", out)
 	}
 }
@@ -174,10 +183,10 @@ func TestInitDefaultsToFishWhenShellEnvIsFish(t *testing.T) {
 	if !strings.Contains(out, "--on-variable PWD") {
 		t.Fatalf("expected default snippet to be fish when SHELL is fish, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate hook --quiet") {
+	if !strings.Contains(out, expectedHookInvocation(t)+" --quiet") {
 		t.Fatalf("expected fish default snippet to invoke quiet hook, got %q", out)
 	}
-	if !strings.Contains(out, "pupdate hook --quiet --async") {
+	if !strings.Contains(out, expectedHookInvocation(t)+" --quiet --async") {
 		t.Fatalf("expected fish default snippet to use async mode, got %q", out)
 	}
 }
@@ -211,10 +220,10 @@ func TestInitDefaultsToBashWhenShellEnvIsEmptyOrUnknown(t *testing.T) {
 			if !strings.Contains(out, "PROMPT_COMMAND") {
 				t.Fatalf("expected default snippet to be bash, got %q", out)
 			}
-			if !strings.Contains(out, "pupdate hook --quiet") {
+			if !strings.Contains(out, expectedHookInvocation(t)+" --quiet") {
 				t.Fatalf("expected bash default snippet to invoke quiet hook, got %q", out)
 			}
-			if !strings.Contains(out, "pupdate hook --quiet --async") {
+			if !strings.Contains(out, expectedHookInvocation(t)+" --quiet --async") {
 				t.Fatalf("expected bash default snippet to use async mode, got %q", out)
 			}
 		})
@@ -233,5 +242,39 @@ func TestInitRejectsUnsupportedHookMode(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "supported modes: foreground, async") {
 		t.Fatalf("expected actionable hook-mode error, got %q", err.Error())
+	}
+}
+
+func TestShellQuoteWrapsInSingleQuotes(t *testing.T) {
+	got := shellQuote("/usr/local/bin/pupdate")
+	want := "'/usr/local/bin/pupdate'"
+	if got != want {
+		t.Fatalf("shellQuote: got %q, want %q", got, want)
+	}
+}
+
+func TestShellQuoteHandlesPathWithSpaces(t *testing.T) {
+	got := shellQuote("/opt/my tools/pupdate")
+	want := "'/opt/my tools/pupdate'"
+	if got != want {
+		t.Fatalf("shellQuote with spaces: got %q, want %q", got, want)
+	}
+}
+
+func TestShellQuoteEscapesSingleQuotes(t *testing.T) {
+	got := shellQuote("/opt/pat's tools/pupdate")
+	want := "'/opt/pat'\\''s tools/pupdate'"
+	if got != want {
+		t.Fatalf("shellQuote with single quote: got %q, want %q", got, want)
+	}
+}
+
+func TestResolvedExecutablePathReturnsNonEmpty(t *testing.T) {
+	path := resolvedExecutablePath()
+	if path == "" {
+		t.Fatal("resolvedExecutablePath returned empty string")
+	}
+	if !filepath.IsAbs(path) {
+		t.Fatalf("resolvedExecutablePath returned non-absolute path: %q", path)
 	}
 }

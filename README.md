@@ -91,13 +91,13 @@ eval "\$(pupdate init --shell zsh)"
 eval "\$(pupdate init --shell fish)"
 ```
 
-The generated hooks run `pupdate hook --quiet` on directory changes, but skip
-launching from `$HOME`. Quiet mode stays silent for no-op runs and only prints
-status when an update actually executes.
+The generated hooks run the resolved `pupdate` executable path with `hook --quiet`
+on directory changes, but skip launching from `$HOME`. Quiet mode stays silent
+for no-op runs and only prints status when an update actually executes.
 
-By default, `pupdate init` generates hooks that run `pupdate hook --quiet --async`
-in the background. Overlapping background runs in the same repo are skipped
-while a recent `.pupdate.hook.lock` exists.
+By default, `pupdate init` generates hooks that run `hook --quiet --async`
+in the background using the current executable path. Overlapping background runs
+in the same repo are skipped while a recent `.pupdate.hook.lock` exists.
 
 ## What It Does
 

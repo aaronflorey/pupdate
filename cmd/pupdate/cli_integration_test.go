@@ -149,7 +149,7 @@ func TestCLIIntegrationInitPrintsAsyncHookSnippet(t *testing.T) {
 	if !strings.Contains(stdout, "PROMPT_COMMAND") {
 		t.Fatalf("expected bash init snippet, got %q", stdout)
 	}
-	if !strings.Contains(stdout, "pupdate hook --quiet --async") {
+	if !strings.Contains(stdout, expectedHookInvocation(t)+" --quiet --async") {
 		t.Fatalf("expected default async hook snippet, got %q", stdout)
 	}
 }
