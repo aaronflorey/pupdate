@@ -25,6 +25,14 @@ var userConfigDir = os.UserConfigDir
 var runtimeGOOS = runtime.GOOS
 
 func resolveUserConfigPath() (string, error) {
+	if env := os.Getenv("PUPDATE_CONFIG"); env != "" {
+		path, err := filepath.Abs(env)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve PUPDATE_CONFIG path %q: %w", env, err)
+		}
+		return path, nil
+	}
+
 	configDir, err := resolveUserConfigDir()
 	if err != nil {
 		return "", err

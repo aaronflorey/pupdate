@@ -152,6 +152,7 @@ Environment:
 
 User config:
 
+- `PUPDATE_CONFIG=/path/to/config.yaml`: override the config file path for this invocation; relative paths resolve from the current working directory
 - `~/.config/pupdate/config.yaml`
 - `root_directories:` with one or more paths (for example `~/code`): only run when the current working directory is a direct child of one of those roots; `~` expands to the user's home directory
 - `workspace_globs:` with one or more repo-relative directory globs (for example `apps/*` or `services/*`): opt in to scanning additional workspace directories that match those patterns

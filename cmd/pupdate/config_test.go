@@ -61,6 +61,63 @@ func TestResolveUserConfigPathUsesXDGConfigHomeOnDarwin(t *testing.T) {
 	}
 }
 
+func TestResolveUserConfigPathUsesPupdateConfigEnv(t *testing.T) {
+	customPath := filepath.Join(string(filepath.Separator), "etc", "pupdate", "custom.yaml")
+	t.Setenv("PUPDATE_CONFIG", customPath)
+
+	path, err := resolveUserConfigPath()
+	if err != nil {
+		t.Fatalf("resolve user config path: %v", err)
+	}
+
+	if path != customPath {
+		t.Fatalf("expected path %q, got %q", customPath, path)
+	}
+}
+
+func TestResolveUserConfigPathResolvesRelativePupdateConfigEnv(t *testing.T) {
+	baseDir := t.TempDir()
+	withChdir(t, baseDir)
+	t.Setenv("PUPDATE_CONFIG", "my-config.yaml")
+
+	path, err := resolveUserConfigPath()
+	if err != nil {
+		t.Fatalf("resolve user config path: %v", err)
+	}
+
+	expected := filepath.Join(baseDir, "my-config.yaml")
+	if path != expected {
+		t.Fatalf("expected path %q, got %q", expected, path)
+	}
+}
+
+func TestResolveUserConfigPathIgnoresEmptyPupdateConfigEnv(t *testing.T) {
+	previousGOOS := runtimeGOOS
+	previousUserConfigDir := userConfigDir
+
+	t.Cleanup(func() {
+		runtimeGOOS = previousGOOS
+		userConfigDir = previousUserConfigDir
+	})
+
+	runtimeGOOS = "linux"
+	t.Setenv("PUPDATE_CONFIG", "")
+	customDir := filepath.Join(string(filepath.Separator), "home", "tester", ".config")
+	userConfigDir = func() (string, error) {
+		return customDir, nil
+	}
+
+	path, err := resolveUserConfigPath()
+	if err != nil {
+		t.Fatalf("resolve user config path: %v", err)
+	}
+
+	expected := filepath.Join(customDir, "pupdate", "config.yaml")
+	if path != expected {
+		t.Fatalf("expected path %q, got %q", expected, path)
+	}
+}
+
 func TestResolveUserConfigResolvesRootDirectories(t *testing.T) {
 	baseDir := t.TempDir()
 	withChdir(t, baseDir)
