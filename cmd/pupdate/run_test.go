@@ -1594,3 +1594,97 @@ func TestRunExecutesGitSubmoduleUpdateWhenGitDecisionRequiresUpdate(t *testing.T
 		t.Fatalf("expected git completion status line, got %q", stderr.String())
 	}
 }
+
+func TestDryRunShowsStatusLinesButDoesNotExecuteInstall(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock")
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		execCommand = exec.CommandContext
+		lookPath = exec.LookPath
+	})
+
+	var installRan bool
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		installRan = true
+		return exec.CommandContext(ctx, "true")
+	}
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--dry-run"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run --dry-run failed: %v", err)
+	}
+
+	if installRan {
+		t.Fatal("expected --dry-run to skip install execution")
+	}
+	if !strings.Contains(stderr.String(), "pupdate: --dry-run (no installs, no state changes)") {
+		t.Fatalf("expected dry-run status line, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: run bun install") {
+		t.Fatalf("expected run line showing what would run, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "pupdate: dry-run bun install") {
+		t.Fatalf("expected dry-run line, got %q", stderr.String())
+	}
+}
+
+func TestDryRunDoesNotWriteStateFile(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock")
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+	})
+
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+
+	statePath := filepath.Join(dir, ".pupdate")
+	if _, err := os.Stat(statePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected state file to start missing")
+	}
+
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--dry-run"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run --dry-run failed: %v", err)
+	}
+
+	if _, err := os.Stat(statePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected --dry-run to leave no state file, stderr=%q", stderr.String())
+	}
+}
+
+func TestDryRunStillShowsSkippedEcosystems(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock")
+	withChdir(t, dir)
+
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--dry-run"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("run --dry-run failed: %v", err)
+	}
+
+	// detection still runs; up-to-date ecosystems still show skip lines
+	if !strings.Contains(stderr.String(), "pupdate: --dry-run (no installs, no state changes)") {
+		t.Fatalf("expected dry-run status line, got %q", stderr.String())
+	}
+}

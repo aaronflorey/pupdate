@@ -23,13 +23,14 @@ var currentUserHomeDir = func() (string, error) {
 	return current.HomeDir, nil
 }
 
-func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool) error {
+func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRunFlag bool) error {
 	preflight, err := collectPreflight(preflightOptions{})
 	if err != nil {
 		return err
 	}
 
 	options := resolveRunOptions(cmd, preflight.ResolvedConfig, quietFlag, allowScriptsFlag)
+	options.DryRun = dryRunFlag
 
 	if skipLine, ok := runSkipStatusLine(preflight.SkipReason); ok {
 		printStatus(cmd, options.Quiet, skipLine)
@@ -44,8 +45,14 @@ func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool) error
 	if installDisabled {
 		printStatus(cmd, options.Quiet, "pupdate: installs disabled via PUPDATE_SKIP_INSTALL")
 	}
+	if options.DryRun {
+		printStatus(cmd, options.Quiet, "pupdate: --dry-run (no installs, no state changes)")
+	}
 
 	outcomes := executeRunResults(cmd, preflight.Results, preflight.DecisionByEcosystem, options, installDisabled)
+	if options.DryRun {
+		return nil
+	}
 	return saveRunOutcomes(preflight.Store, preflight.CurrentState, preflight.Results, outcomes)
 }
 
@@ -166,6 +173,14 @@ func executeRunResult(
 	}
 
 	fmt.Fprintln(cmd.ErrOrStderr(), formatRunLine(result, plan))
+	if options.DryRun {
+		fmt.Fprintln(cmd.ErrOrStderr(), formatDryRunLine(result, plan))
+		return ecosystemOutcome{
+			StateKey:  result.StateKey(),
+			Succeeded: false,
+			Lockfiles: decision.Lockfiles,
+		}, false
+	}
 	err := runInstall(cmd, options.Quiet, filepath.Join(".", result.Directory), plan.Manager, plan.Args...)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s install failed: %v\n", plan.Manager, err)
@@ -256,6 +271,14 @@ func formatDoneLine(result detection.DetectionResult, plan managerPlan) string {
 		doneLine += fmt.Sprintf(" (in %s)", result.Directory)
 	}
 	return doneLine
+}
+
+func formatDryRunLine(result detection.DetectionResult, plan managerPlan) string {
+	line := fmt.Sprintf("pupdate: dry-run %s %s", plan.Manager, strings.Join(plan.Args, " "))
+	if result.Directory != "" && result.Directory != "." {
+		line += fmt.Sprintf(" (in %s)", result.Directory)
+	}
+	return line
 }
 
 func hasPupIgnore(dir string) (bool, error) {

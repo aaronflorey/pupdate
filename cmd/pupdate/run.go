@@ -11,6 +11,7 @@ import (
 type runOptions struct {
 	Quiet        bool
 	AllowScripts bool
+	DryRun       bool
 }
 
 var detectFn = detection.DetectWithOptions
@@ -21,6 +22,7 @@ var evaluateFreshnessFn = freshness.Evaluate
 func newRunCmd() *cobra.Command {
 	var quiet bool
 	var allowScripts bool
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -29,14 +31,16 @@ func newRunCmd() *cobra.Command {
 			"The command emits concise human-readable status lines and only runs installs when dependency inputs changed.",
 		Example: `pupdate run
 pupdate run --quiet
+pupdate run --dry-run
 PUPDATE_SKIP_INSTALL=1 pupdate run`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return executeRun(cmd, quiet, allowScripts)
+			return executeRun(cmd, quiet, allowScripts, dryRun)
 		},
 		SilenceErrors: true,
 	}
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "suppress no-op output and child command output")
 	cmd.Flags().BoolVar(&allowScripts, "allow-scripts", false, "allow dependency manager lifecycle scripts")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would run without executing installs or saving state")
 	return cmd
 }

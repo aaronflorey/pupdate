@@ -144,6 +144,7 @@ Flags:
 
 - `--quiet`: suppress no-op output and child command output
 - `--allow-scripts`: allow dependency manager lifecycle scripts where supported
+- `--dry-run`: show what would run without executing installs or saving state
 
 Environment:
 

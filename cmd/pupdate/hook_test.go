@@ -20,7 +20,7 @@ func TestExecuteHookForegroundDelegatesToRun(t *testing.T) {
 	})
 
 	called := 0
-	executeRunFn = func(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool) error {
+	executeRunFn = func(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRunFlag bool) error {
 		called++
 		if !quietFlag {
 			t.Fatal("expected quiet flag to propagate to run execution")
@@ -251,7 +251,7 @@ func TestExecuteHookChildRemovesLockFileAfterRun(t *testing.T) {
 	t.Cleanup(func() {
 		executeRunFn = previousExecuteRunFn
 	})
-	executeRunFn = func(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool) error {
+	executeRunFn = func(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRunFlag bool) error {
 		return errors.New("run failed")
 	}
 

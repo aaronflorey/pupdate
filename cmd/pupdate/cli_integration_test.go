@@ -301,7 +301,7 @@ func TestCLIIntegrationHookChildRemovesLockAfterExecution(t *testing.T) {
 	})
 
 	called := 0
-	executeRunFn = func(cmd *cobra.Command, quiet bool, allowScripts bool) error {
+	executeRunFn = func(cmd *cobra.Command, quiet bool, allowScripts bool, dryRun bool) error {
 		called++
 		if !quiet {
 			t.Fatal("expected child hook to preserve quiet flag")

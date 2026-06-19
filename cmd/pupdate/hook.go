@@ -67,11 +67,11 @@ func executeHook(cmd *cobra.Command, quiet bool, async bool, child bool, lockFil
 			return fmt.Errorf("background hook child requires --lock-file")
 		}
 		defer removeBackgroundHookLock(lockFile)
-		return executeRunFn(cmd, quiet, false)
+		return executeRunFn(cmd, quiet, false, false)
 	}
 
 	if !async {
-		return executeRunFn(cmd, quiet, false)
+		return executeRunFn(cmd, quiet, false, false)
 	}
 
 	return launchBackgroundHook(cmd, quiet)
