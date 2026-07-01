@@ -3,7 +3,7 @@ module github.com/aaronflorey/pupdate
 go 1.26
 
 require (
-	github.com/git-pkgs/managers v0.9.0
+	github.com/git-pkgs/managers v0.10.1
 	github.com/git-pkgs/manifests v0.5.0
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/spf13/cobra v1.10.2
