@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/git-pkgs/managers v0.9.0
-	github.com/git-pkgs/manifests v0.5.0
+	github.com/git-pkgs/manifests v0.6.0
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -12,8 +12,8 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
-	github.com/bazelbuild/buildtools v0.0.0-20260319080235-05d2ebe49b0f // indirect
-	github.com/git-pkgs/pom v0.1.4 // indirect
+	github.com/bazelbuild/buildtools v0.0.0-20260622120422-77b9b380c0a4 // indirect
+	github.com/git-pkgs/pom v0.1.5 // indirect
 	github.com/git-pkgs/purl v0.1.12 // indirect
 	github.com/git-pkgs/vers v0.2.5 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
