@@ -304,3 +304,8 @@ from shell history or logs.
 - Hook-driven runs default to non-blocking async execution and avoid launching from `$HOME`.
 - Async hook mode skips overlapping background runs per repo using `.pupdate.hook.lock`.
 - Git submodule status failures are surfaced as stderr errors without crashing the command.
+
+## Development
+
+For local setup, build, test, lint, and release commands, see
+[`docs/development.md`](docs/development.md).
