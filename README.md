@@ -99,6 +99,9 @@ By default, `pupdate init` generates hooks that run `hook --quiet --async`
 in the background using the current executable path. Overlapping background runs
 in the same repo are skipped while a recent `.pupdate.hook.lock` exists.
 
+Both `.pupdate` and `.pupdate.hook.lock` are generated local-machine state files.
+Add them to your application repository's ignore file and do not commit them.
+
 ## What It Does
 
 - detects supported dependency ecosystems from lockfiles and manifests
