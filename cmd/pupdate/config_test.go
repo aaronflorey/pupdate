@@ -78,6 +78,10 @@ func TestResolveUserConfigPathUsesPupdateConfigEnv(t *testing.T) {
 func TestResolveUserConfigPathResolvesRelativePupdateConfigEnv(t *testing.T) {
 	baseDir := t.TempDir()
 	withChdir(t, baseDir)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
 	t.Setenv("PUPDATE_CONFIG", "my-config.yaml")
 
 	path, err := resolveUserConfigPath()
@@ -85,9 +89,15 @@ func TestResolveUserConfigPathResolvesRelativePupdateConfigEnv(t *testing.T) {
 		t.Fatalf("resolve user config path: %v", err)
 	}
 
-	expected := filepath.Join(baseDir, "my-config.yaml")
+	expected := filepath.Join(cwd, "my-config.yaml")
 	if path != expected {
 		t.Fatalf("expected path %q, got %q", expected, path)
+	}
+	if !filepath.IsAbs(path) {
+		t.Fatalf("expected resolved path to be absolute, got %q", path)
+	}
+	if filepath.Base(path) != "my-config.yaml" {
+		t.Fatalf("expected resolved path to end with %q, got %q", "my-config.yaml", path)
 	}
 }
 
