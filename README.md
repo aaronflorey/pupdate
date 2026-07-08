@@ -23,7 +23,7 @@ its existing traversal limits, local state flow, and safe default behavior.
 Homebrew:
 
 ```bash
-brew install aaronflorey/tap/pupdate
+brew install --cask aaronflorey/tap/pupdate
 ```
 
 Go toolchain:
@@ -52,7 +52,7 @@ Requires [`bin`](https://github.com/aaronflorey/bin) to be installed and availab
 - Operating systems outside that support surface are best-effort only and are not shipped as release binaries.
 - CI runs on pull requests and pushes to `main` across Linux and macOS.
 - `release-please` maintains changelog and semver release PRs.
-- GoReleaser publishes tagged release binaries and updates Homebrew tap artifacts.
+- GoReleaser publishes tagged Linux/macOS release binaries and updates the Homebrew tap cask.
 - Release notes are published on the [GitHub Releases page](https://github.com/aaronflorey/pupdate/releases).
 
 ## Quick Start

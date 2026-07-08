@@ -10,7 +10,6 @@ builds:
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
       - arm64
@@ -41,13 +40,18 @@ release:
 
     Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
 
-brews:
+homebrew_casks:
   - name: pupdate
+    ids:
+      - pupdate
+    binaries:
+      - pupdate
     repository:
       owner: aaronflorey
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
+    url:
+      verified: github.com/aaronflorey/pupdate/
     homepage: "https://github.com/aaronflorey/pupdate"
     description: "Auto-update project dependencies on directory entry"
