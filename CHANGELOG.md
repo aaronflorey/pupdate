@@ -1,5 +1,81 @@
 # Changelog
 
+## [0.8.0](https://github.com/aaronflorey/pupdate/compare/v0.7.0...v0.8.0) (2026-07-08)
+
+
+### Features
+
+* add reset command ([ba21f1b](https://github.com/aaronflorey/pupdate/commit/ba21f1bbc05f361de15cec7676a192c6b03c36b5))
+* add run dry-run mode ([77b5809](https://github.com/aaronflorey/pupdate/commit/77b58093747ccdc9fed7b8c1d617096a07e2f948))
+* cli error visibility ([2f3da4d](https://github.com/aaronflorey/pupdate/commit/2f3da4dd204c9f2c501c444ae71be52b44f75721))
+* **cli:** add project status diagnostics ([07243bb](https://github.com/aaronflorey/pupdate/commit/07243bb0e53ec39544ffd52f431440b64a735db6))
+* **cli:** Quiet no-op runs and drop JSON output ([ff80520](https://github.com/aaronflorey/pupdate/commit/ff8052078e453d04533baff54c44593769124e9b))
+* **config:** Add root directory scoping and config inspect command ([10e3d52](https://github.com/aaronflorey/pupdate/commit/10e3d5259bf8935f4cae0f7fb34f9e8f91ce61ae))
+* **config:** add run default controls ([cff2653](https://github.com/aaronflorey/pupdate/commit/cff26539ad02cd6b870bbfc8511e2373ef29bd1b))
+* **config:** Support root directory lists and config bootstrap ([24edab1](https://github.com/aaronflorey/pupdate/commit/24edab1637056c23cc7b6e2fe127ca100414a535))
+* **deps:** Integrate git-pkgs package tooling ([a5e412e](https://github.com/aaronflorey/pupdate/commit/a5e412e070d02f34ac9a41334818f843066bc680))
+* **detection:** Add depth-1 subfolder support ([32e869f](https://github.com/aaronflorey/pupdate/commit/32e869f524105104bf06beb5518e9090be63be29))
+* **detection:** Add Kasetto support ([841bead](https://github.com/aaronflorey/pupdate/commit/841bead7fd6b824be75dba53264e5af33a23852b))
+* **detection:** Scan packages children and honor gitignore ([28dd28f](https://github.com/aaronflorey/pupdate/commit/28dd28f077f88431316038ba952945be0f22d414))
+* **hook:** add opt-in async shell mode ([237ce3b](https://github.com/aaronflorey/pupdate/commit/237ce3b6717565a81d3095e964983828914342fb))
+* initial commit ([6c5dc75](https://github.com/aaronflorey/pupdate/commit/6c5dc7545227fbe2b24b1c15986e3b41feacb4eb))
+* **P1-R1:** review hook and platform contract updates ([6439d9a](https://github.com/aaronflorey/pupdate/commit/6439d9aad9dee06ea95e9293902e42c1f484e8b5))
+* **P1-T1:** make init async by default ([274f566](https://github.com/aaronflorey/pupdate/commit/274f566fc82ac65f0b98c6e114a8fe0f113f87f1))
+* **P1-T2:** align shipped platform support docs ([282d1af](https://github.com/aaronflorey/pupdate/commit/282d1af0f98633753e31995a99e7352755a9c6c9))
+* **P2-R1:** review shared preflight and status guidance ([4010a1e](https://github.com/aaronflorey/pupdate/commit/4010a1e8002b97e6181b0ce9c8303426345066ff))
+* **P2-T1:** extract shared preflight collection ([8125281](https://github.com/aaronflorey/pupdate/commit/8125281a80144213aae2e2b61b6a7b952d2b27ba))
+* **P2-T2:** add status remediation guidance ([69e6be1](https://github.com/aaronflorey/pupdate/commit/69e6be17f12c9eb18498a5e0df6317e717d95869))
+* **P3-R1:** review monorepo scan expansion ([c8038d8](https://github.com/aaronflorey/pupdate/commit/c8038d8ec5ae378a994faddfa9395308a7ed6ff9))
+* **P3-T1:** define workspace_globs config support ([9639f17](https://github.com/aaronflorey/pupdate/commit/9639f17ce47ae8552da59756fe5113a935eb027d))
+* **P3-T2:** apply workspace_globs during detection ([c37f900](https://github.com/aaronflorey/pupdate/commit/c37f900327e636704a71d9972e47116141ca207a))
+* **P3-T3:** document workspace_globs behavior ([7392d0d](https://github.com/aaronflorey/pupdate/commit/7392d0d2190e7f666e2b891131aad1254bc84fbc))
+* **P3-T4:** add folder blacklist config support ([e6029f7](https://github.com/aaronflorey/pupdate/commit/e6029f7062fe4baa3b66c8235cc1042fca1e420d))
+* **P3-T5:** apply folder blacklist across detection ([96f75e5](https://github.com/aaronflorey/pupdate/commit/96f75e5fd487871217798445a09cc804c55007fc))
+* **P3-T6:** document folder blacklist behavior ([e36f744](https://github.com/aaronflorey/pupdate/commit/e36f74429b29d5a302b3edb26e312e3f2fa4c8a9))
+* **P3:** add folder blacklist planning ([dff8c3d](https://github.com/aaronflorey/pupdate/commit/dff8c3d870a0540e38b70caa453f7290ddf9f305))
+* support PUPDATE_CONFIG override ([4d5b9f3](https://github.com/aaronflorey/pupdate/commit/4d5b9f3773ff2737c6192b9cad76a24b9fa104cd))
+
+
+### Bug Fixes
+
+* change syscall to platform specific ([569ef48](https://github.com/aaronflorey/pupdate/commit/569ef48f579f50db2d372d7f7189c08fa785a5b4))
+* **ci:** Remove Windows and normalize macOS paths ([5b0a560](https://github.com/aaronflorey/pupdate/commit/5b0a560b4e29c154eb340f3f8f19d58bc4c39f27))
+* cli silence ([82e8465](https://github.com/aaronflorey/pupdate/commit/82e8465fb7e607b3e35c3aa942ee7c4693767d91))
+* **config:** Match root directories case-insensitively ([cfd1e2c](https://github.com/aaronflorey/pupdate/commit/cfd1e2c352ea54e63ec436d308faa0e222670b79))
+* **config:** respect root directory casing ([7df2bd5](https://github.com/aaronflorey/pupdate/commit/7df2bd5a262136542408d887dc2120fdef332f23))
+* **config:** stop auto-creating user config ([15953af](https://github.com/aaronflorey/pupdate/commit/15953afd54bec857afaa1406105885a76819c253))
+* **config:** Use ~/.config path on macOS ([15c3747](https://github.com/aaronflorey/pupdate/commit/15c374785f85aaeaa4379aaaf3bbe8d7e884ca7f))
+* **detection:** preserve canonical Cargo.lock casing ([a729662](https://github.com/aaronflorey/pupdate/commit/a729662b13321834a88e144e8181277e02ab3057))
+* **detection:** preserve matched lockfile paths ([5510774](https://github.com/aaronflorey/pupdate/commit/55107745d430be041671e2861b34b59ee251a516))
+* **freshness:** always hash lockfiles ([ccdda5d](https://github.com/aaronflorey/pupdate/commit/ccdda5d2c627c312398fd5720ad97305d8dcf6c7))
+* **freshness:** bound git submodule status checks ([e8827fa](https://github.com/aaronflorey/pupdate/commit/e8827faf55707024d33f8bc7d799491f662ae70e))
+* **freshness:** safely reuse unchanged lockfile hashes ([19f0def](https://github.com/aaronflorey/pupdate/commit/19f0def5c24b3e901b5e217c137b9b1e42bf6dad))
+* **hook:** keep async overlap locks live ([7941bbb](https://github.com/aaronflorey/pupdate/commit/7941bbbf0c1fc21b5ed0fdc8ab423db89e6af5f6))
+* **kasetto:** correct subproject config path and close audit drift ([a0d944e](https://github.com/aaronflorey/pupdate/commit/a0d944ef99576e9752532d7b39d840eca238c663))
+* **kasetto:** require local config for sync ([dcd3c10](https://github.com/aaronflorey/pupdate/commit/dcd3c10ec10d0b30a53cfb54df3ec5aba9c9fcf5))
+* **kasetto:** scope sync to detected project ([f603877](https://github.com/aaronflorey/pupdate/commit/f6038771267a512502e336195f4180ed66098750))
+* macos testing ([c4ed3d9](https://github.com/aaronflorey/pupdate/commit/c4ed3d9ac9d3f64df5e3bf81f48af9f68680ece7))
+* **P4-R1:** review installation tooling and cli confidence phase ([2417aa8](https://github.com/aaronflorey/pupdate/commit/2417aa81e629011e339580c8c3dd38cb3e4b694a))
+* **P4-T2:** pin mise go version ([77fae62](https://github.com/aaronflorey/pupdate/commit/77fae62e8ab183b70b6948b9431f6ac1258b9657))
+* persist post-install lockfile state ([5769ef7](https://github.com/aaronflorey/pupdate/commit/5769ef712d41eb1cb5331084fb8c7b7dbc0387e7))
+* python command  error wording ([7be5e08](https://github.com/aaronflorey/pupdate/commit/7be5e089a6a925aa5f34ef5665e57bc13bbb355a))
+* release policy drift ([40a30c0](https://github.com/aaronflorey/pupdate/commit/40a30c0f0460e3d99ff60955509491b3e44d8ade))
+* **release:** keep one release workflow path ([99f62be](https://github.com/aaronflorey/pupdate/commit/99f62beccaa2990a7a56bc05cd894260ce7a21c0))
+* replace go-git ignore matcher ([3fea4c4](https://github.com/aaronflorey/pupdate/commit/3fea4c46a440f107ad67d8405cf12cbd361d81be))
+* **run:** Skip all phases when .pupignore exists ([f1ae2c9](https://github.com/aaronflorey/pupdate/commit/f1ae2c97c5ebd3676a477cdbaf997f983c414fb3))
+* skip unchanged composer lockfiles ([43dfcaa](https://github.com/aaronflorey/pupdate/commit/43dfcaadc36333c19d852dd2122bb56bb192e5f0))
+* **state:** fsync parent directory on save ([1a67c6d](https://github.com/aaronflorey/pupdate/commit/1a67c6db8e6baed8e486292f86a80e30f5e333e0))
+* **state:** prune stale run entries ([96623aa](https://github.com/aaronflorey/pupdate/commit/96623aa845059a9fc4080f45b0fdcbef6ca8bbd5))
+* **test:** Align config path assertion with resolver ([c227daf](https://github.com/aaronflorey/pupdate/commit/c227daf912d208120427e41906572cc1c0fcc4a2))
+* **test:** Normalize resolved config path assertion ([b2e0298](https://github.com/aaronflorey/pupdate/commit/b2e02982b152a65d2cacac33633f3f6435268d3c))
+* **test:** Stabilize root directory resolution on macOS ([95d3dd0](https://github.com/aaronflorey/pupdate/commit/95d3dd037bca79668c3845b161c796cb864aa715))
+* use absolute hook executable path ([4b51ecc](https://github.com/aaronflorey/pupdate/commit/4b51ecc9172ec08cb042c819c74a64e89bcd46a8))
+
+
+### Performance Improvements
+
+* **freshness:** cache lockfile metadata ([85771e3](https://github.com/aaronflorey/pupdate/commit/85771e3fededbb71bbcb48fd0cef067044855fd3))
+
 ## [0.7.0](https://github.com/aaronflorey/pupdate/compare/v0.6.2...v0.7.0) (2026-05-28)
 
 
