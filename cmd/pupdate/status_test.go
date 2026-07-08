@@ -465,3 +465,76 @@ func TestStatusShowsBlockedTargetWhenManagerMissing(t *testing.T) {
 		t.Fatalf("expected missing-manager guidance, got %q", out)
 	}
 }
+
+func TestStatusShowsPythonAllowScriptsGateReason(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "uv.lock")
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		detectFn = detection.DetectWithOptions
+		evaluateFreshnessFn = freshness.Evaluate
+		lookPath = exec.LookPath
+	})
+	detectFn = func(string, detection.Options) ([]detection.DetectionResult, error) {
+		return []detection.DetectionResult{{
+			Ecosystem:    detection.EcosystemPython,
+			Managers:     []string{"uv"},
+			MatchedFiles: []string{"uv.lock"},
+		}}, nil
+	}
+	evaluateFreshnessFn = func(string, []detection.DetectionResult, state.FileState) ([]freshness.EcosystemDecision, error) {
+		return []freshness.EcosystemDecision{{
+			Ecosystem:        string(detection.EcosystemPython),
+			StateKey:         "python",
+			Decision:         freshness.DecisionUpdate,
+			Reason:           "dependency lockfiles changed since last successful run",
+			Lockfiles:        map[string]string{"uv.lock": "new"},
+			LockfileMetadata: map[string]state.LockfileMetadata{"uv.lock": {Size: 1}},
+		}}, nil
+	}
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("status command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "run_reason: 1 ecosystem needs updates but updates are blocked by the allow-scripts policy") {
+		t.Fatalf("expected blocked policy run reason, got %q", out)
+	}
+	if !strings.Contains(out, "run_guidance: rerun with --allow-scripts, or set allow_scripts: true in config to allow Python installs") {
+		t.Fatalf("expected blocked policy run guidance, got %q", out)
+	}
+	if strings.Contains(out, "run_reason: uv not found on PATH") {
+		t.Fatalf("expected top-level run reason to stay on allow-scripts policy, got %q", out)
+	}
+	if strings.Contains(out, "run_guidance: install uv or add it to PATH, then rerun pupdate status") {
+		t.Fatalf("expected top-level run guidance to stay on allow-scripts policy, got %q", out)
+	}
+	expectedReason := "install_reason: python manager uv can execute install/build code; rerun with --allow-scripts to allow"
+	if !strings.Contains(out, "run_status: blocked") {
+		t.Fatalf("expected blocked run status, got %q", out)
+	}
+	if !strings.Contains(out, "install_status: blocked") {
+		t.Fatalf("expected blocked install status, got %q", out)
+	}
+	if !strings.Contains(out, expectedReason) {
+		t.Fatalf("expected python allow-scripts gate reason %q, got %q", expectedReason, out)
+	}
+	if !strings.Contains(out, "install_command: (none)") {
+		t.Fatalf("expected blocked python target to omit install command, got %q", out)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}

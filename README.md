@@ -107,20 +107,20 @@ in the same repo are skipped while a recent `.pupdate.hook.lock` exists.
 - stores local state in `.pupdate`
 - explains current detection, freshness, config, and PATH readiness with `pupdate status`
 - respects `.pupignore` to skip the full run (detection, freshness checks, and installs)
-- uses safe defaults and requires explicit opt-in for lifecycle scripts
+- uses safe defaults and requires explicit opt-in for lifecycle scripts or Python installs that can run install/build code
 
 ## Supported Ecosystems
 
-| Ecosystem | Detected By | Manager | Default Command |
-|-----------|-------------|---------|-----------------|
+| Ecosystem | Detected By | Manager | Default Behavior |
+|-----------|-------------|---------|------------------|
 | Node | `bun.lock` | `bun` | `bun install --frozen-lockfile --ignore-scripts` |
 | Node | `package-lock.json` | `npm` | `npm ci --ignore-scripts` |
 | Node | `pnpm-lock.yaml` | `pnpm` | `pnpm install --frozen-lockfile --ignore-scripts` |
 | Node | `yarn.lock` | `yarn` | `yarn install --frozen-lockfile --ignore-scripts` |
 | PHP | `composer.lock` | `composer` | `composer install --no-interaction --prefer-dist --no-scripts` |
-| Python | `uv.lock` | `uv` | `uv sync --frozen` |
-| Python | `poetry.lock` | `poetry` | `poetry install --no-interaction --sync` |
-| Python | `requirements.txt` | `pip` | `pip install -r requirements.txt --disable-pip-version-check --no-input` |
+| Python | `uv.lock` | `uv` | skipped by default; `--allow-scripts` opts into `uv sync --frozen` |
+| Python | `poetry.lock` | `poetry` | skipped by default; `--allow-scripts` opts into `poetry install --no-interaction --sync` |
+| Python | `requirements.txt` | `pip` | skipped by default; `--allow-scripts` opts into `pip install -r requirements.txt --disable-pip-version-check --no-input` |
 | Kasetto | `kasetto.lock`, `kasetto.yaml`, `kasetto.yml` | `kst` | `kst sync --project --config <local-config>` |
 | Go | `go.mod` | `go` | `go mod download` |
 | Rust | `cargo.lock` | `cargo` | `cargo fetch --locked` |
@@ -143,7 +143,7 @@ restricted to top-level project directories inside configured roots.
 Flags:
 
 - `--quiet`: suppress no-op output and child command output
-- `--allow-scripts`: allow dependency manager lifecycle scripts where supported
+- `--allow-scripts`: allow dependency manager lifecycle scripts where supported, and opt into Python installs that can execute install/build code
 - `--dry-run`: show what would run without executing installs or saving state
 
 Environment:
@@ -258,7 +258,8 @@ Output includes:
    namespaced keys per ecosystem and directory.
 4. If dependency inputs are unchanged since the last successful run, it skips work.
 5. If inputs changed, or if no successful state exists yet, it runs the manager's
-   safe default command.
+   safe default command. Managers without a verified safe mode (currently the
+   Python managers) are skipped unless you explicitly allow scripts.
 6. On success, it updates `.pupdate` with the latest lockfile hashes and timestamp.
 
 For git submodules, `pupdate` also checks `git submodule status --recursive` so it
@@ -292,7 +293,8 @@ from shell history or logs.
 
 - Safe and frozen install modes are used by default where supported.
 - Lifecycle scripts are disabled by default where supported.
-- `--allow-scripts` is required to opt into lifecycle scripts.
+- Python managers are skipped by default and only run when you explicitly pass `--allow-scripts`.
+- `--allow-scripts` is required to opt into lifecycle scripts and Python installs that can execute install/build code.
 - `.pupignore` short-circuits the full run for a repository before detection and state checks.
 - `root_directories` can restrict runs to top-level project directories under specific roots.
 - Hook-driven runs default to non-blocking async execution and avoid launching from `$HOME`.

@@ -1187,24 +1187,6 @@ func TestSelectManagerPlanExpandedManagersUseSafeFlags(t *testing.T) {
 			args:    []string{"install", "--frozen-lockfile", "--ignore-scripts"},
 		},
 		{
-			name:    "python uv",
-			result:  detection.DetectionResult{Ecosystem: detection.EcosystemPython, Managers: []string{"uv"}},
-			manager: "uv",
-			args:    []string{"sync", "--frozen"},
-		},
-		{
-			name:    "python poetry",
-			result:  detection.DetectionResult{Ecosystem: detection.EcosystemPython, Managers: []string{"poetry"}},
-			manager: "poetry",
-			args:    []string{"install", "--no-interaction", "--sync"},
-		},
-		{
-			name:    "python pip",
-			result:  detection.DetectionResult{Ecosystem: detection.EcosystemPython, Managers: []string{"pip"}},
-			manager: "pip",
-			args:    []string{"install", "-r", "requirements.txt", "--disable-pip-version-check", "--no-input"},
-		},
-		{
 			name:    "kasetto",
 			result:  detection.DetectionResult{Ecosystem: detection.EcosystemKasetto, Managers: []string{"kst"}, MatchedFiles: []string{"kasetto.yaml"}},
 			manager: "kst",
@@ -1240,6 +1222,34 @@ func TestSelectManagerPlanExpandedManagersUseSafeFlags(t *testing.T) {
 	}
 }
 
+func TestSelectManagerPlanDefaultPythonManagersRequireAllowScripts(t *testing.T) {
+	tests := []struct {
+		name    string
+		manager string
+	}{
+		{name: "uv", manager: "uv"},
+		{name: "poetry", manager: "poetry"},
+		{name: "pip", manager: "pip"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, ok, reason := selectManagerPlan(detection.DetectionResult{
+				Ecosystem: detection.EcosystemPython,
+				Managers:  []string{tt.manager},
+			}, false)
+			if ok {
+				t.Fatalf("expected python manager %q to be gated behind allow-scripts", tt.manager)
+			}
+
+			expectedReason := fmt.Sprintf("python manager %s can execute install/build code; rerun with --allow-scripts to allow", tt.manager)
+			if reason != expectedReason {
+				t.Fatalf("unexpected skip reason: got %q want %q", reason, expectedReason)
+			}
+		})
+	}
+}
+
 func TestSelectManagerPlanAllowScriptsDropsScriptBlockingFlags(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -1260,6 +1270,21 @@ func TestSelectManagerPlanAllowScriptsDropsScriptBlockingFlags(t *testing.T) {
 			name:   "npm",
 			result: detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"npm"}},
 			args:   []string{"ci"},
+		},
+		{
+			name:   "python uv",
+			result: detection.DetectionResult{Ecosystem: detection.EcosystemPython, Managers: []string{"uv"}},
+			args:   []string{"sync", "--frozen"},
+		},
+		{
+			name:   "python poetry",
+			result: detection.DetectionResult{Ecosystem: detection.EcosystemPython, Managers: []string{"poetry"}},
+			args:   []string{"install", "--no-interaction", "--sync"},
+		},
+		{
+			name:   "python pip",
+			result: detection.DetectionResult{Ecosystem: detection.EcosystemPython, Managers: []string{"pip"}},
+			args:   []string{"install", "-r", "requirements.txt", "--disable-pip-version-check", "--no-input"},
 		},
 		{
 			name:   "kasetto",
@@ -1325,6 +1350,58 @@ func TestRunAllowScriptsUsesOptInFlags(t *testing.T) {
 	}
 	if strings.Contains(stderr.String(), "--ignore-scripts") {
 		t.Fatalf("expected allow-scripts status line to omit script-blocking flag, got %q", stderr.String())
+	}
+}
+
+func TestRunPythonDefaultSkipReasons(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    string
+		manager string
+	}{
+		{name: "uv", file: "uv.lock", manager: "uv"},
+		{name: "poetry", file: "poetry.lock", manager: "poetry"},
+		{name: "pip", file: "requirements.txt", manager: "pip"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFixtureFiles(t, dir, tt.file)
+			withChdir(t, dir)
+
+			t.Cleanup(func() {
+				lookPath = exec.LookPath
+				execCommand = exec.CommandContext
+			})
+			lookPath = func(file string) (string, error) {
+				return file, nil
+			}
+
+			installRan := false
+			execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+				installRan = true
+				return exec.CommandContext(ctx, "true")
+			}
+
+			var stderr bytes.Buffer
+			cmd := newRootCmd()
+			cmd.SetArgs([]string{"run"})
+			cmd.SetOut(&bytes.Buffer{})
+			cmd.SetErr(&stderr)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("run command failed: %v", err)
+			}
+
+			expected := fmt.Sprintf("pupdate: skip python (python manager %s can execute install/build code; rerun with --allow-scripts to allow)", tt.manager)
+			got := strings.TrimSpace(stderr.String())
+			if got != expected {
+				t.Fatalf("expected exact python default skip output %q, got %q", expected, got)
+			}
+			if installRan {
+				t.Fatal("expected python install to be skipped by default")
+			}
+		})
 	}
 }
 
@@ -1458,11 +1535,14 @@ func TestRunPrintsRunLineForExpandedManagers(t *testing.T) {
 		ecosystem string
 		manager   string
 		args      string
+		cmdArgs   []string
 	}{
-		{name: "node npm", file: "package-lock.json", ecosystem: "node", manager: "npm", args: "ci --ignore-scripts"},
-		{name: "python pip", file: "requirements.txt", ecosystem: "python", manager: "pip", args: "install -r requirements.txt --disable-pip-version-check --no-input"},
-		{name: "kasetto", file: "kasetto.yaml", ecosystem: "kasetto", manager: "kst", args: "sync --project --config kasetto.yaml"},
-		{name: "go", file: "go.mod", ecosystem: "go", manager: "go", args: "mod download"},
+		{name: "node npm", file: "package-lock.json", ecosystem: "node", manager: "npm", args: "ci --ignore-scripts", cmdArgs: []string{"run"}},
+		{name: "python uv allow scripts", file: "uv.lock", ecosystem: "python", manager: "uv", args: "sync --frozen", cmdArgs: []string{"run", "--allow-scripts"}},
+		{name: "python poetry allow scripts", file: "poetry.lock", ecosystem: "python", manager: "poetry", args: "install --no-interaction --sync", cmdArgs: []string{"run", "--allow-scripts"}},
+		{name: "python pip allow scripts", file: "requirements.txt", ecosystem: "python", manager: "pip", args: "install -r requirements.txt --disable-pip-version-check --no-input", cmdArgs: []string{"run", "--allow-scripts"}},
+		{name: "kasetto", file: "kasetto.yaml", ecosystem: "kasetto", manager: "kst", args: "sync --project --config kasetto.yaml", cmdArgs: []string{"run"}},
+		{name: "go", file: "go.mod", ecosystem: "go", manager: "go", args: "mod download", cmdArgs: []string{"run"}},
 	}
 
 	for _, tt := range tests {
@@ -1483,7 +1563,8 @@ func TestRunPrintsRunLineForExpandedManagers(t *testing.T) {
 			}
 
 			var stderr bytes.Buffer
-			cmd := newRunCmd()
+			cmd := newRootCmd()
+			cmd.SetArgs(tt.cmdArgs)
 			cmd.SetOut(&bytes.Buffer{})
 			cmd.SetErr(&stderr)
 			if err := cmd.Execute(); err != nil {

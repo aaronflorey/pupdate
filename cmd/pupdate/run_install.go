@@ -88,18 +88,15 @@ func selectManagerPlan(result detection.DetectionResult, allowScripts bool) (man
 		if len(result.Managers) != 1 {
 			return managerPlan{}, false, "multiple Python lockfiles detected; skipping install"
 		}
-		switch result.Managers[0] {
-		case "uv":
-			return buildInstallPlan("uv", managers.CommandInput{Flags: map[string]any{"frozen": true}})
-		case "poetry":
-			return buildInstallPlan("poetry", managers.CommandInput{
-				Extra: []string{"--no-interaction", "--sync"},
-			})
-		case "pip":
-			return buildInstallPlan("pip", managers.CommandInput{Extra: []string{"--disable-pip-version-check", "--no-input"}})
-		default:
-			return managerPlan{}, false, fmt.Sprintf("unsupported Python manager %q; skipping install", result.Managers[0])
+
+		plan, ok, reason := selectPythonManagerPlan(result.Managers[0])
+		if !ok {
+			return managerPlan{}, false, reason
 		}
+		if !allowScripts {
+			return managerPlan{}, false, fmt.Sprintf("python manager %s can execute install/build code; rerun with --allow-scripts to allow", result.Managers[0])
+		}
+		return plan, true, ""
 	case detection.EcosystemKasetto:
 		if len(result.Managers) != 1 {
 			return managerPlan{}, false, "multiple Kasetto signals detected; skipping install"
@@ -132,6 +129,21 @@ func kasettoConfigPath(matchedFiles []string) string {
 	}
 
 	return ""
+}
+
+func selectPythonManagerPlan(managerName string) (managerPlan, bool, string) {
+	switch managerName {
+	case "uv":
+		return buildInstallPlan("uv", managers.CommandInput{Flags: map[string]any{"frozen": true}})
+	case "poetry":
+		return buildInstallPlan("poetry", managers.CommandInput{
+			Extra: []string{"--no-interaction", "--sync"},
+		})
+	case "pip":
+		return buildInstallPlan("pip", managers.CommandInput{Extra: []string{"--disable-pip-version-check", "--no-input"}})
+	default:
+		return managerPlan{}, false, fmt.Sprintf("unsupported Python manager %q; skipping install", managerName)
+	}
 }
 
 func buildInstallPlan(managerName string, input managers.CommandInput) (managerPlan, bool, string) {

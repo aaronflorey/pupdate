@@ -160,7 +160,7 @@ func executeRunResult(
 	plan, ok, reason := selectManagerPlan(result, options.AllowScripts)
 	if !ok {
 		if reason != "" && !options.Quiet {
-			fmt.Fprintln(cmd.ErrOrStderr(), "pupdate:", reason)
+			fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s)\n", target, reason)
 		}
 		return ecosystemOutcome{}, false
 	}

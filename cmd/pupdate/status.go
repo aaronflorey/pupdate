@@ -105,7 +105,9 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 
 	snapshot.Targets = targets
 	snapshot.DetectedTargets = len(targets)
-	snapshot.RunStatus, snapshot.RunReason = summarizeStatusTargets(targets)
+	targetRunGuidance := []string(nil)
+	snapshot.RunStatus, snapshot.RunReason, targetRunGuidance = summarizeStatusTargets(targets)
+	snapshot.RunGuidance = append(snapshot.RunGuidance, targetRunGuidance...)
 	return snapshot, nil
 }
 
@@ -191,32 +193,47 @@ func detectionWarnings(warnings []detection.Warning) []string {
 	return messages
 }
 
-func summarizeStatusTargets(targets []statusTarget) (string, string) {
+func summarizeStatusTargets(targets []statusTarget) (string, string, []string) {
 	if len(targets) == 0 {
-		return "idle", "no supported ecosystems detected"
+		return "idle", "no supported ecosystems detected", nil
 	}
 
 	readyCount := 0
 	blockedCount := 0
+	policyBlockedCount := 0
 	for _, target := range targets {
 		switch target.InstallStatus {
 		case "ready":
 			readyCount++
 		case "blocked":
 			blockedCount++
+			if strings.Contains(target.InstallReason, "--allow-scripts") {
+				policyBlockedCount++
+			}
 		}
 	}
 
+	policyGuidance := []string(nil)
+	if policyBlockedCount > 0 {
+		policyGuidance = []string{"rerun with --allow-scripts, or set allow_scripts: true in config to allow Python installs"}
+	}
+
 	if readyCount > 0 && blockedCount > 0 {
-		return "mixed", fmt.Sprintf("%s; %d are blocked", formatEcosystemNeedCount(readyCount+blockedCount), blockedCount)
+		if policyBlockedCount == blockedCount {
+			return "mixed", fmt.Sprintf("%s; %d are blocked by the allow-scripts policy", formatEcosystemNeedCount(readyCount+blockedCount), blockedCount), policyGuidance
+		}
+		return "mixed", fmt.Sprintf("%s; %d are blocked", formatEcosystemNeedCount(readyCount+blockedCount), blockedCount), nil
 	}
 	if readyCount > 0 {
-		return "ready", formatEcosystemNeedCount(readyCount)
+		return "ready", formatEcosystemNeedCount(readyCount), nil
 	}
 	if blockedCount > 0 {
-		return "blocked", fmt.Sprintf("%s but required managers are unavailable", formatEcosystemNeedCount(blockedCount))
+		if policyBlockedCount == blockedCount {
+			return "blocked", fmt.Sprintf("%s but updates are blocked by the allow-scripts policy", formatEcosystemNeedCount(blockedCount)), policyGuidance
+		}
+		return "blocked", fmt.Sprintf("%s but required managers are unavailable", formatEcosystemNeedCount(blockedCount)), nil
 	}
-	return "idle", "all detected ecosystems are already up to date"
+	return "idle", "all detected ecosystems are already up to date", nil
 }
 
 func formatEcosystemNeedCount(count int) string {
