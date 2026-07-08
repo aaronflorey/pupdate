@@ -42,6 +42,7 @@ Requires [`bin`](https://github.com/aaronflorey/bin) to be installed and availab
 
 ## Project Docs
 
+- Documentation home: [`docs/index.md`](docs/index.md)
 - Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Code of conduct: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 - Security policy: [`SECURITY.md`](SECURITY.md)
