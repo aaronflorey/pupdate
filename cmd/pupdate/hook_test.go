@@ -263,3 +263,19 @@ func TestExecuteHookChildRemovesLockFileAfterRun(t *testing.T) {
 		t.Fatalf("expected child hook to remove lock file, err=%v", statErr)
 	}
 }
+
+func TestHookChildPrintsConfigParseErrorWithoutUsage(t *testing.T) {
+	configHome := t.TempDir()
+	projectDir := t.TempDir()
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("root_directories: [oops\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	withChdir(t, projectDir)
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"hook", "--child", "--lock-file", filepath.Join(projectDir, backgroundHookLockFileName)})
+	assertExecuteCmdShowsErrorWithoutUsage(t, cmd, "pupdate: error: failed to parse "+configPath)
+}

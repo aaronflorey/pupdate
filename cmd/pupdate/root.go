@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -12,6 +13,8 @@ var (
 	date    = "unknown"
 	builtBy = "unknown"
 )
+
+var rootCommandFactory = newRootCmd
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -31,7 +34,19 @@ func newRootCmd() *cobra.Command {
 }
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
-		os.Exit(1)
+	os.Exit(execute())
+}
+
+func execute() int {
+	return executeCmd(rootCommandFactory())
+}
+
+func executeCmd(cmd *cobra.Command) int {
+	cmd.SilenceErrors = true
+	if err := cmd.Execute(); err != nil {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error: %v\n", err)
+		return 1
 	}
+
+	return 0
 }

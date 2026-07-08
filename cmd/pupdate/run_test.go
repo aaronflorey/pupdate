@@ -691,6 +691,41 @@ func TestRunReturnsParseErrorWhenYAMLIsInvalid(t *testing.T) {
 	if !strings.Contains(err.Error(), "failed to parse "+configPath) {
 		t.Fatalf("expected parse error with config path, got %q", err.Error())
 	}
+
+	cliCmd := newRootCmd()
+	cliCmd.SetArgs([]string{"run"})
+	assertExecuteCmdShowsErrorWithoutUsage(t, cliCmd, "pupdate: error: failed to parse "+configPath)
+}
+
+func TestRunQuietStillPrintsFatalConfigErrorsToStderr(t *testing.T) {
+	configHome := t.TempDir()
+	projectDir := t.TempDir()
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("root_directories: [oops\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	withChdir(t, projectDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run", "--quiet"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected quiet run command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to parse "+configPath) {
+		t.Fatalf("expected parse error with config path, got %q", err.Error())
+	}
+
+	cliCmd := newRootCmd()
+	cliCmd.SetArgs([]string{"run", "--quiet"})
+	assertExecuteCmdShowsErrorWithoutUsage(t, cliCmd, "pupdate: error: failed to parse "+configPath)
 }
 
 func TestRunReturnsUserConfigDirResolutionError(t *testing.T) {
@@ -718,6 +753,10 @@ func TestRunReturnsUserConfigDirResolutionError(t *testing.T) {
 	if !strings.Contains(err.Error(), "failed to resolve user config directory: boom") {
 		t.Fatalf("expected config-dir resolution error, got %q", err.Error())
 	}
+
+	cliCmd := newRootCmd()
+	cliCmd.SetArgs([]string{"run"})
+	assertExecuteCmdShowsErrorWithoutUsage(t, cliCmd, "pupdate: error: failed to resolve user config directory: boom")
 }
 
 func TestRunReturnsReadErrorWhenConfigPathIsDirectory(t *testing.T) {
@@ -742,6 +781,10 @@ func TestRunReturnsReadErrorWhenConfigPathIsDirectory(t *testing.T) {
 	if !strings.Contains(err.Error(), "failed to read "+configPath) {
 		t.Fatalf("expected read error with config path, got %q", err.Error())
 	}
+
+	cliCmd := newRootCmd()
+	cliCmd.SetArgs([]string{"run"})
+	assertExecuteCmdShowsErrorWithoutUsage(t, cliCmd, "pupdate: error: failed to read "+configPath)
 }
 
 func TestRunQuietPrintsRunAndDoneWhenUpdateRuns(t *testing.T) {

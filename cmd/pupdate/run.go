@@ -37,7 +37,7 @@ PUPDATE_SKIP_INSTALL=1 pupdate run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return executeRun(cmd, quiet, allowScripts, dryRun)
 		},
-		SilenceErrors: true,
+		SilenceUsage: true,
 	}
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "suppress no-op output and child command output")
 	cmd.Flags().BoolVar(&allowScripts, "allow-scripts", false, "allow dependency manager lifecycle scripts")

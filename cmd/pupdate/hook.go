@@ -44,11 +44,11 @@ func newHookCmd() *cobra.Command {
 	var lockFile string
 
 	cmd := &cobra.Command{
-		Use:           "hook",
-		Short:         "Run internal shell-hook flow",
-		Hidden:        true,
-		Args:          cobra.NoArgs,
-		SilenceErrors: true,
+		Use:          "hook",
+		Short:        "Run internal shell-hook flow",
+		Hidden:       true,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return executeHook(cmd, quiet, async, child, lockFile)
 		},
