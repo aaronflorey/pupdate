@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
@@ -69,5 +70,22 @@ func TestExecuteCmdPrintsSingleErrorToConfiguredStderr(t *testing.T) {
 	}
 	if strings.Contains(output, "Error:") {
 		t.Fatalf("expected cobra default error emission to be suppressed, got %q", output)
+	}
+}
+
+func TestExecuteCmdSuppressesUsageForRuntimeErrors(t *testing.T) {
+	cmd := &cobra.Command{Use: "pupdate"}
+	cmd.AddCommand(&cobra.Command{
+		Use:  "status",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return errors.New("boom")
+		},
+	})
+	cmd.SetArgs([]string{"status"})
+
+	output := assertExecuteCmdShowsErrorWithoutUsage(t, cmd, "pupdate: error: boom")
+	if strings.Count(output, "pupdate: error:") != 1 {
+		t.Fatalf("expected exactly one formatted error message, got %q", output)
 	}
 }

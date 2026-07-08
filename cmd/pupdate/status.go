@@ -222,7 +222,7 @@ func summarizeStatusTargets(targets []statusTarget) (string, string, []string) {
 		if policyBlockedCount == blockedCount {
 			return "mixed", fmt.Sprintf("%s; %d are blocked by the allow-scripts policy", formatEcosystemNeedCount(readyCount+blockedCount), blockedCount), policyGuidance
 		}
-		return "mixed", fmt.Sprintf("%s; %d are blocked", formatEcosystemNeedCount(readyCount+blockedCount), blockedCount), nil
+		return "mixed", fmt.Sprintf("%s; %d are blocked", formatEcosystemNeedCount(readyCount+blockedCount), blockedCount), policyGuidance
 	}
 	if readyCount > 0 {
 		return "ready", formatEcosystemNeedCount(readyCount), nil
@@ -230,6 +230,9 @@ func summarizeStatusTargets(targets []statusTarget) (string, string, []string) {
 	if blockedCount > 0 {
 		if policyBlockedCount == blockedCount {
 			return "blocked", fmt.Sprintf("%s but updates are blocked by the allow-scripts policy", formatEcosystemNeedCount(blockedCount)), policyGuidance
+		}
+		if policyBlockedCount > 0 {
+			return "blocked", fmt.Sprintf("%s but updates are blocked", formatEcosystemNeedCount(blockedCount)), policyGuidance
 		}
 		return "blocked", fmt.Sprintf("%s but required managers are unavailable", formatEcosystemNeedCount(blockedCount)), nil
 	}

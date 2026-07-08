@@ -538,3 +538,83 @@ func TestStatusShowsPythonAllowScriptsGateReason(t *testing.T) {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
 	}
 }
+
+func TestStatusShowsAllowScriptsGuidanceWithMixedBlockers(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "uv.lock", "bun.lock")
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		detectFn = detection.DetectWithOptions
+		evaluateFreshnessFn = freshness.Evaluate
+		lookPath = exec.LookPath
+	})
+	detectFn = func(string, detection.Options) ([]detection.DetectionResult, error) {
+		return []detection.DetectionResult{
+			{
+				Ecosystem:    detection.EcosystemPython,
+				Managers:     []string{"uv"},
+				MatchedFiles: []string{"uv.lock"},
+			},
+			{
+				Ecosystem:    detection.EcosystemNode,
+				Managers:     []string{"bun"},
+				MatchedFiles: []string{"bun.lock"},
+			},
+		}, nil
+	}
+	evaluateFreshnessFn = func(string, []detection.DetectionResult, state.FileState) ([]freshness.EcosystemDecision, error) {
+		return []freshness.EcosystemDecision{
+			{
+				Ecosystem:        string(detection.EcosystemPython),
+				StateKey:         "python",
+				Decision:         freshness.DecisionUpdate,
+				Reason:           "dependency lockfiles changed since last successful run",
+				Lockfiles:        map[string]string{"uv.lock": "new"},
+				LockfileMetadata: map[string]state.LockfileMetadata{"uv.lock": {Size: 1}},
+			},
+			{
+				Ecosystem:        string(detection.EcosystemNode),
+				StateKey:         "node",
+				Decision:         freshness.DecisionUpdate,
+				Reason:           "dependency lockfiles changed since last successful run",
+				Lockfiles:        map[string]string{"bun.lock": "new"},
+				LockfileMetadata: map[string]state.LockfileMetadata{"bun.lock": {Size: 1}},
+			},
+		}, nil
+	}
+	lookPath = func(string) (string, error) {
+		return "", exec.ErrNotFound
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("status command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "run_status: blocked") {
+		t.Fatalf("expected blocked run status, got %q", out)
+	}
+	if !strings.Contains(out, "run_reason: 2 ecosystems need updates but updates are blocked") {
+		t.Fatalf("expected generic blocked run reason, got %q", out)
+	}
+	if !strings.Contains(out, "run_guidance: rerun with --allow-scripts, or set allow_scripts: true in config to allow Python installs") {
+		t.Fatalf("expected allow-scripts guidance with mixed blockers, got %q", out)
+	}
+	if !strings.Contains(out, "install_reason: python manager uv can execute install/build code; rerun with --allow-scripts to allow") {
+		t.Fatalf("expected python policy blocker reason, got %q", out)
+	}
+	if !strings.Contains(out, "install_reason: bun not found on PATH") {
+		t.Fatalf("expected missing-manager blocker reason, got %q", out)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
