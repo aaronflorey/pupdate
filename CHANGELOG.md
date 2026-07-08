@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/aaronflorey/pupdate/compare/v0.8.0...v0.8.1) (2026-07-08)
+
+
+### Bug Fixes
+
+* repair goreleaser homebrew cask ([f8e480b](https://github.com/aaronflorey/pupdate/commit/f8e480bafb4548581907bc2175d1c47d3a5f3286))
+
 ## [0.8.0](https://github.com/aaronflorey/pupdate/compare/v0.7.0...v0.8.0) (2026-07-08)
 
 
