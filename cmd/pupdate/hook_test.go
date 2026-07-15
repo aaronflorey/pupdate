@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -261,6 +263,67 @@ func TestExecuteHookChildRemovesLockFileAfterRun(t *testing.T) {
 	}
 	if _, statErr := os.Stat(lockPath); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("expected child hook to remove lock file, err=%v", statErr)
+	}
+}
+
+func TestExecuteHookQuietChildSuppressesSuccessfulUpdateStatus(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "package-lock.json")
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "true")
+	}
+
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"hook", "--quiet", "--child", "--lock-file", filepath.Join(dir, backgroundHookLockFileName)})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute quiet child hook: %v", err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected successful quiet child hook not to overwrite the shell prompt, got %q", stderr.String())
+	}
+}
+
+func TestExecuteHookQuietChildStillPrintsInstallErrors(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "package-lock.json")
+	withChdir(t, dir)
+
+	t.Cleanup(func() {
+		lookPath = exec.LookPath
+		execCommand = exec.CommandContext
+	})
+	lookPath = func(file string) (string, error) {
+		return file, nil
+	}
+	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "false")
+	}
+
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"hook", "--quiet", "--child", "--lock-file", filepath.Join(dir, backgroundHookLockFileName)})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute quiet child hook: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "pupdate: error npm install failed") {
+		t.Fatalf("expected quiet child hook to retain install errors, got %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "pupdate: run npm") {
+		t.Fatalf("expected quiet child hook to suppress routine run status, got %q", stderr.String())
 	}
 }
 

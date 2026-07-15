@@ -93,8 +93,9 @@ eval "\$(pupdate init --shell fish)"
 ```
 
 The generated hooks run the resolved `pupdate` executable path with `hook --quiet`
-on directory changes, but skip launching from `$HOME`. Quiet mode stays silent
-for no-op runs and only prints status when an update actually executes.
+on directory changes, but skip launching from `$HOME`. Quiet hooks suppress
+routine status and child-command output while still reporting install errors,
+so asynchronous updates do not overwrite the live shell prompt.
 
 By default, `pupdate init` generates hooks that run `hook --quiet --async`
 in the background using the current executable path. Overlapping background runs

@@ -1,78 +1,42 @@
-<!-- GSD:project-start source:PROJECT.md -->
+# AGENTS.md
+
 ## Project
 
-**pupdate**
+`pupdate` is a Go CLI whose shell hooks detect dependency manifests on directory changes, run safe package-manager commands, and cache successful results in local state. The hook path must remain low-latency and non-blocking.
 
-pupdate is a fast Go CLI that detects package ecosystems in the current directory and runs the correct dependency update commands automatically when entering a project. It supports JavaScript/TypeScript, PHP, Go, Rust, and Python projects by detecting lockfiles/manifests and using the corresponding package manager binary from the user's configured `PATH`. It tracks update history in a local `.pupdate` state file and skips unnecessary work unless dependency files changed.
+## Toolchain And Commands
 
-**Core Value:** Keep project dependencies up to date automatically on directory entry without noticeably slowing down shell navigation.
+- Go 1.26 is pinned by both `go.mod` and `mise.toml`; run `mise install` after checkout and use `mise exec --` for Go commands.
+- Build: `mise exec -- go build ./cmd/pupdate`
+- Test all packages: `mise exec -- go test ./... -count=1`
+- Test one package: `mise exec -- go test ./cmd/pupdate -count=1`
+- Test one case: `mise exec -- go test ./cmd/pupdate -run '^TestExecuteCmdReturnsZeroWithoutPrintingOnSuccess$' -count=1`
+- Vet: `mise exec -- go vet ./...`
+- Format Go code: `mise exec -- gofmt -w ./cmd ./internal`
+- Run the CI hot-path benchmarks: `mise exec -- go test ./internal/detection ./internal/freshness -run '^$' -bench 'Benchmark(DetectProjectTree|HashMatchedFiles)$' -count=1`
+- CI runs vet, the uncached full suite, then hot-path benchmarks on Linux and macOS; mirror that order for hook, detection, freshness, state, or cross-platform changes.
 
-### Constraints
+## Code Map
 
-- **Performance**: Hook invocation on `cd` must be low-latency — avoid expensive scans/processes when no relevant files changed.
-- **Runtime detection**: Manager binaries must be discovered via current process `PATH` — required for environment managers like `nvm`, `asdf`, and `mise`.
-- **Shell compatibility**: Initial v1 should support at least `bash` and `zsh` hook setup reliably via `init`.
-- **Safety**: Auto-update behavior must be transparent and non-blocking; users need visible status and errors.
-- **Release automation**: GitHub Actions pipeline must support semver/tagged releases via Release Please and GoReleaser.
-<!-- GSD:project-end -->
+- `cmd/pupdate/` is the `main` package and owns Cobra commands, config/preflight handling, install orchestration, shell snippets, async hook locking, and state coordination. The executable entrypoint is `cmd/pupdate/root.go`.
+- `internal/detection/` scans the repo root, depth-1 directories, direct children of `packages/`, and configured `workspace_globs`; it applies `.gitignore` and exact-name `folder_blacklist` rules.
+- `internal/freshness/` hashes matched inputs, reuses file metadata on Linux/macOS, and checks git-submodule drift. Changes here must preserve the performance guardrail in `performance_guardrail_test.go`.
+- `internal/state/` owns schema-versioned JSON in `.pupdate`; saves are atomic. Invalid or incompatible state is intentionally treated as empty with a warning.
+- `docs/architecture.md` documents the execution and async-hook flows; `docs/development.md` and `.github/workflows/ci.yml` are the command sources of truth.
 
-<!-- GSD:stack-start source:research/STACK.md -->
-## Technology Stack
+## Behavioral Constraints
 
-## Recommendation
-- **Language**: Go (stable toolchain, current LTS branch)
-- **CLI framework**: `spf13/cobra`
-- **Config/state serialization**: `gopkg.in/yaml.v3` (or JSON only using stdlib)
-- **Fast file checks**: stdlib `os.Stat` + `filepath`
-- **Process execution**: stdlib `os/exec` with context timeouts
-- **Shell integration**: generated shell snippets for `bash` and `zsh`
-- **Release automation**: Release Please + GoReleaser + GitHub Actions
-## Why this stack
-- Go compiles to a single fast binary with low startup latency.
-- `cobra` gives predictable command ergonomics (`init`, `run`, `status`) and shell completion support.
-- stdlib process + filesystem APIs are enough for high-performance detection/update paths.
-- GitHub-native release tooling keeps changelog, tagging, and binaries aligned.
-## What not to use
-- Full daemon/background service for v1: unnecessary complexity and platform edge cases.
-- Heavy file watchers for every directory: higher overhead than cheap mtime checks on `cd`.
-- Shell-specific hardcoded binary paths: breaks user-managed runtime environments.
-## Confidence
-- **High**: Go + stdlib + Cobra for cross-platform CLI
-- **High**: Release Please + GoReleaser for OSS-style releases
-- **Medium**: YAML vs JSON for `.pupdate` (JSON is simpler; YAML is more human-readable)
-<!-- GSD:stack-end -->
+- Resolve package-manager executables from the current process `PATH`; hardcoded paths break `nvm`, `asdf`, and `mise` users.
+- Keep hook execution silent on no-op `--quiet` runs, concise on stderr when work occurs, and async by default. Preserve bash, zsh, and fish snippet behavior.
+- Keep existing safe install defaults: frozen/locked modes, lifecycle scripts disabled where supported, and Python installs gated by `--allow-scripts`.
+- Do not broaden traversal casually; scan depth, `workspace_globs`, `.gitignore`, `folder_blacklist`, and the repo-wide `.pupignore` serve distinct behavior.
+- `.pupdate` and `.pupdate.hook.lock` are generated per-repository machine state. Never commit or use them as fixtures outside temporary test directories.
+- Use `t.TempDir()` for filesystem tests and shared command helpers from `cmd/pupdate/test_env_test.go` where applicable.
+- Update `README.md` and relevant docs when flags, shell setup, output, supported managers, or config behavior changes.
 
-<!-- GSD:conventions-start source:CONVENTIONS.md -->
-## Conventions
+## Repository Gotchas
 
-- Assume the default git branch is `main` unless the user explicitly says otherwise.
-- Always push to `main` unless the user explicitly says otherwise.
-<!-- GSD:conventions-end -->
-
-<!-- GSD:architecture-start source:ARCHITECTURE.md -->
-## Architecture
-
-Architecture not yet mapped. Follow existing patterns found in the codebase.
-<!-- GSD:architecture-end -->
-
-<!-- GSD:workflow-start source:GSD defaults -->
-## GSD Workflow Enforcement
-
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
-
-Use these entry points:
-- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd:debug` for investigation and bug fixing
-- `/gsd:execute-phase` for planned phase work
-
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
-<!-- GSD:workflow-end -->
-
-
-
-<!-- GSD:profile-start -->
-## Developer Profile
-
-> Profile not yet configured. Run `/gsd:profile-user` to generate your developer profile.
-> This section is managed by `generate-claude-profile` -- do not edit manually.
-<!-- GSD:profile-end -->
+- `internal/detection/matrix.go` combines `git-pkgs/manifests` identification with local Kasetto fallbacks; adding an ecosystem usually also requires install-plan and README changes.
+- Install commands are constructed through embedded `git-pkgs/managers` definitions in `cmd/pupdate/run_install.go`; retain non-interactive and safety flags when changing plans.
+- Do not edit the generated block between `BEGIN genignore` and `END genignore` in `.gitignore` manually.
+- Release Please owns semver release PRs/tags and `CHANGELOG.md`; GoReleaser publishes Linux/macOS amd64/arm64 archives and the Homebrew cask. Use conventional commit prefixes so release classification works; workflow sources are `.github/workflows/release.yaml`, `release-please-config.json`, and `.goreleaser.yaml`.

@@ -9,9 +9,10 @@ import (
 )
 
 type runOptions struct {
-	Quiet        bool
-	AllowScripts bool
-	DryRun       bool
+	Quiet                 bool
+	SuppressRoutineStatus bool
+	AllowScripts          bool
+	DryRun                bool
 }
 
 var detectFn = detection.DetectWithOptions
