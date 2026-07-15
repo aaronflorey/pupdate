@@ -43,7 +43,7 @@ two stages: release-please and GoReleaser.
 
 - **Trigger:** Push to `main` or `master`.
 - **Config:** `release-please-config.json` (release type: `go`, package name: `pupdate`, changelog: `CHANGELOG.md`).
-- **Manifest:** `.release-please-manifest.json` (current version: `0.7.0`).
+- **Manifest:** `.release-please-manifest.json` tracks the current released version.
 - **Behavior:** Maintains a release PR that accumulates conventional commits. When merged, it creates a tagged release and updates `CHANGELOG.md`.
 - **Output:** `release_created` and `tag_name` outputs for the GoReleaser job.
 
@@ -71,7 +71,7 @@ brew install --cask aaronflorey/tap/pupdate
 
 ## Release versioning
 
-- **Type:** Semantic versioning with `v` prefix (e.g. `v0.7.0`).
+- **Type:** Semantic versioning with `v` prefix (e.g. `v0.8.1`).
 - **Config:** `include-v-in-tag: true`, `include-component-in-tag: false`.
 - **Changelog:** `CHANGELOG.md` is maintained by release-please.
 - **Conventional commits:** Required for release-please to classify changes (`feat:`, `fix:`, `chore:`, etc.). `docs:` and `test:` commits are excluded from the changelog.

@@ -100,7 +100,7 @@ pupdate init [flags]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--shell` | string | `""` (auto-detect from `$SHELL`) | Shell to configure: `bash`, `zsh`, or `fish`. Falls back to `bash` if `$SHELL` is unset or unsupported. |
+| `--shell` | string | `""` (auto-detect from `$SHELL`) | Shell to configure: `bash`, `zsh`, or `fish`. Falls back to `bash` if `$SHELL` is empty or not one of those supported shells. |
 | `--mode` | string | `async` | Hook execution mode: `async` (background, default) or `foreground` (synchronous). |
 
 ### Usage

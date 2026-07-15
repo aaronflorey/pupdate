@@ -6,7 +6,8 @@ contribution workflow.
 ## Prerequisites
 
 - **Go 1.26** or later. The version is declared in `go.mod` and `mise.toml`.
-- If you use [mise](https://mise.jdx.dev/), the Go version is managed automatically:
+- [mise](https://mise.jdx.dev/) is recommended for installing and running the
+  pinned Go toolchain:
   ```bash
   mise install
   ```
@@ -16,7 +17,8 @@ contribution workflow.
 ```bash
 git clone https://github.com/aaronflorey/pupdate.git
 cd pupdate
-go build ./cmd/pupdate
+mise install
+mise exec -- go build ./cmd/pupdate
 ```
 
 The binary is output to the repository root as `pupdate`.
@@ -26,31 +28,31 @@ The binary is output to the repository root as `pupdate`.
 ### Build
 
 ```bash
-go build ./cmd/pupdate
+mise exec -- go build ./cmd/pupdate
 ```
 
 ### Run tests
 
 ```bash
-go test ./...
+mise exec -- go test ./... -count=1
 ```
 
 Run a focused test package:
 
 ```bash
-go test ./cmd/pupdate -count=1
+mise exec -- go test ./cmd/pupdate -count=1
 ```
 
 ### Vet
 
 ```bash
-go vet ./...
+mise exec -- go vet ./...
 ```
 
 ### Format
 
 ```bash
-gofmt -w ./cmd ./internal
+mise exec -- gofmt -w ./cmd ./internal
 ```
 
 ### Benchmarks
@@ -58,7 +60,7 @@ gofmt -w ./cmd ./internal
 The CI runs hot-path benchmarks for detection and freshness:
 
 ```bash
-go test ./internal/detection ./internal/freshness -run '^$' -bench 'Benchmark(DetectProjectTree|HashMatchedFiles)$' -count=1
+mise exec -- go test ./internal/detection ./internal/freshness -run '^$' -bench 'Benchmark(DetectProjectTree|HashMatchedFiles)$' -count=1
 ```
 
 ## Repository layout
@@ -136,4 +138,5 @@ From `CONTRIBUTING.md`:
 go = "1.26"
 ```
 
-If you use mise, run `mise install` to install the correct Go version automatically.
+Run `mise install` after checkout, then use `mise exec --` for Go commands so
+they consistently use the pinned toolchain.

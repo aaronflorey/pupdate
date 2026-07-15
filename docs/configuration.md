@@ -231,3 +231,8 @@ folder_blacklist_resolved: vendor
 quiet: (not set)
 allow_scripts: (not set)
 ```
+
+For `workspace_globs` and `folder_blacklist`, the `_resolved` values are the
+validated, normalized entries. They remain repository-relative names or
+patterns; unlike `root_directories_resolved`, they are not expanded to
+absolute paths.
