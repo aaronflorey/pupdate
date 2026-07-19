@@ -2,8 +2,6 @@ package detection
 
 import (
 	"strings"
-
-	"github.com/git-pkgs/manifests"
 )
 
 type supportedSignal struct {
@@ -22,110 +20,11 @@ var ecosystemOrder = []Ecosystem{
 	EcosystemGit,
 }
 
-var supportedSignalNames = []string{
-	"bun.lock",
-	"package-lock.json",
-	"pnpm-lock.yaml",
-	"yarn.lock",
-	"composer.lock",
-	"uv.lock",
-	"poetry.lock",
-	"requirements.txt",
-	"kasetto.lock",
-	"kasetto.yaml",
-	"kasetto.yml",
-	"go.mod",
-	"Cargo.lock",
-	".gitmodules",
-}
-
-var signalManagerByName = map[string]string{
-	"bun.lock":          "bun",
-	"package-lock.json": "npm",
-	"pnpm-lock.yaml":    "pnpm",
-	"yarn.lock":         "yarn",
-	"composer.lock":     "composer",
-	"uv.lock":           "uv",
-	"poetry.lock":       "poetry",
-	"requirements.txt":  "pip",
-	"kasetto.lock":      "kst",
-	"kasetto.yaml":      "kst",
-	"kasetto.yml":       "kst",
-	"go.mod":            "go",
-	"Cargo.lock":        "cargo",
-	".gitmodules":       "git",
-}
-
-var localSignalByName = map[string]supportedSignal{
-	"kasetto.lock": {
-		ecosystem: EcosystemKasetto,
-		manager:   "kst",
-		name:      "kasetto.lock",
-	},
-	"kasetto.yaml": {
-		ecosystem: EcosystemKasetto,
-		manager:   "kst",
-		name:      "kasetto.yaml",
-	},
-	"kasetto.yml": {
-		ecosystem: EcosystemKasetto,
-		manager:   "kst",
-		name:      "kasetto.yml",
-	},
-}
-
-var canonicalSignalByLowerName = buildCanonicalSignalNames()
-
-func buildCanonicalSignalNames() map[string]string {
-	canonical := make(map[string]string, len(supportedSignalNames))
-	for _, name := range supportedSignalNames {
-		canonical[strings.ToLower(name)] = name
-	}
-	return canonical
-}
-
 func detectSupportedSignal(name string) (supportedSignal, bool) {
-	canonicalName, ok := canonicalSignalByLowerName[strings.ToLower(name)]
+	registry := signalRegistry()
+	entry, ok := registry[strings.ToLower(name)]
 	if !ok {
 		return supportedSignal{}, false
 	}
-
-	if signal, ok := localSignalByName[canonicalName]; ok {
-		return signal, true
-	}
-
-	ecosystemName, _, ok := manifests.Identify(canonicalName)
-	if !ok {
-		return supportedSignal{}, false
-	}
-
-	ecosystem, ok := manifestEcosystemToDetection(ecosystemName)
-	if !ok {
-		return supportedSignal{}, false
-	}
-
-	return supportedSignal{
-		ecosystem: ecosystem,
-		manager:   signalManagerByName[canonicalName],
-		name:      canonicalName,
-	}, true
-}
-
-func manifestEcosystemToDetection(ecosystem string) (Ecosystem, bool) {
-	switch ecosystem {
-	case "npm":
-		return EcosystemNode, true
-	case "composer":
-		return EcosystemPHP, true
-	case "golang":
-		return EcosystemGo, true
-	case "cargo":
-		return EcosystemRust, true
-	case "pypi":
-		return EcosystemPython, true
-	case "git":
-		return EcosystemGit, true
-	default:
-		return "", false
-	}
+	return entry.signal, true
 }
