@@ -558,6 +558,31 @@ func TestEvaluateGitSubmoduleStatusFailureDoesNotFailEvaluation(t *testing.T) {
 	}
 }
 
+func TestEvaluateUsesEachDetectedGitProjectDirectory(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, ".gitmodules", "root")
+	writeFile(t, dir, "nested/.gitmodules", "nested")
+
+	var probed []string
+	gitSubmoduleStatusFn = func(path string) ([]string, error) {
+		probed = append(probed, path)
+		return nil, nil
+	}
+	t.Cleanup(func() { gitSubmoduleStatusFn = defaultGitSubmoduleStatus })
+
+	_, err := Evaluate(dir, []detection.DetectionResult{
+		{Ecosystem: detection.EcosystemGit, Directory: ".", MatchedFiles: []string{".gitmodules"}},
+		{Ecosystem: detection.EcosystemGit, Directory: "nested", MatchedFiles: []string{"nested/.gitmodules"}},
+	}, state.Empty())
+	if err != nil {
+		t.Fatalf("Evaluate returned error: %v", err)
+	}
+	want := []string{dir, filepath.Join(dir, "nested")}
+	if !slices.Equal(probed, want) {
+		t.Fatalf("unexpected git project probe roots: got %#v want %#v", probed, want)
+	}
+}
+
 func TestDefaultGitSubmoduleStatusTimesOut(t *testing.T) {
 	originalRunner := runGitSubmoduleStatusCommand
 	originalTimeout := gitSubmoduleStatusTimeout

@@ -292,6 +292,72 @@ func TestDetectSingleNodeLockfileHasNoWarning(t *testing.T) {
 	}
 }
 
+func TestDetectMultipleNodeLockfilesForSameManagerWarns(t *testing.T) {
+	tests := []struct {
+		name  string
+		files []string
+	}{
+		{name: "bun", files: []string{"bun.lock", "bun.lockb"}},
+		{name: "npm", files: []string{"package-lock.json", "npm-shrinkwrap.json"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFiles(t, dir, tt.files...)
+			results, err := Detect(dir)
+			if err != nil {
+				t.Fatalf("Detect returned error: %v", err)
+			}
+			node := assertContainsEcosystem(t, results, EcosystemNode)
+			if len(node.MatchedFiles) != 2 || len(node.Managers) != 1 {
+				t.Fatalf("expected two lockfiles for one manager, got %#v", node)
+			}
+			assertHasWarning(t, node.Warnings, WarningNodeMultipleLockfiles)
+		})
+	}
+}
+
+func TestDetectYarnModernWarnings(t *testing.T) {
+	tests := []struct {
+		name           string
+		packageManager string
+		yarnRC         bool
+		expectWarning  bool
+	}{
+		{name: "classic", packageManager: "yarn@1.22.22"},
+		{name: "modern package manager", packageManager: "yarn@4.9.2", expectWarning: true},
+		{name: "modern config", packageManager: "yarn@1.22.22", yarnRC: true, expectWarning: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFiles(t, dir, "yarn.lock")
+			raw := []byte(`{"packageManager":"` + tt.packageManager + `"}`)
+			if err := os.WriteFile(filepath.Join(dir, "package.json"), raw, 0o644); err != nil {
+				t.Fatalf("write package.json: %v", err)
+			}
+			if tt.yarnRC {
+				writeFiles(t, dir, ".yarnrc.yml")
+			}
+
+			results, err := Detect(dir)
+			if err != nil {
+				t.Fatalf("Detect returned error: %v", err)
+			}
+			node := assertContainsEcosystem(t, results, EcosystemNode)
+			hasWarning := false
+			for _, warning := range node.Warnings {
+				hasWarning = hasWarning || warning.Code == WarningYarnModernUnsupported
+			}
+			if hasWarning != tt.expectWarning {
+				t.Fatalf("unexpected Yarn Modern warning state: warnings=%#v", node.Warnings)
+			}
+		})
+	}
+}
+
 func TestDetectIncludesDepthOneSubdirectories(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "frontend"), 0o755); err != nil {

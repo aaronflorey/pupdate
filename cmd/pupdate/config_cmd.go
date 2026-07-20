@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -20,33 +21,35 @@ func newConfigCmd() *cobra.Command {
 				return err
 			}
 
-			_, statErr := os.Stat(path)
-			exists := statErr == nil
-			if statErr != nil && !os.IsNotExist(statErr) {
-				return fmt.Errorf("failed to stat %s: %w", path, statErr)
+			workingDirectory, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to resolve working directory: %w", err)
 			}
-
-			rawConfig, err := readUserConfig(path)
+			projectPath := filepath.Join(workingDirectory, projectConfigFileName)
+			loaded, err := loadPreflightConfig(path, projectPath)
 			if err != nil {
 				return err
 			}
 
-			resolvedConfig, err := resolveUserConfig(rawConfig)
-			if err != nil {
-				return err
-			}
-
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "path: %s\nexists: %t\nroot_directories: %s\nroot_directories_resolved: %s\nworkspace_globs: %s\nworkspace_globs_resolved: %s\nfolder_blacklist: %s\nfolder_blacklist_resolved: %s\nquiet: %s\nallow_scripts: %s\n",
-				path,
-				exists,
-				displayConfigValues(rawConfig.RootDirectories),
-				displayConfigValues(resolvedConfig.RootDirectories),
-				displayConfigValues(rawConfig.WorkspaceGlobs),
-				displayConfigValues(resolvedConfig.WorkspaceGlobs),
-				displayConfigValues(rawConfig.FolderBlacklist),
-				displayConfigValues(resolvedConfig.FolderBlacklist),
-				displayOptionalBool(rawConfig.Quiet),
-				displayOptionalBool(rawConfig.AllowScripts),
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "path: %s\nexists: %t\nroot_directories: %s\nroot_directories_resolved: %s\nworkspace_globs: %s\nworkspace_globs_resolved: %s\nfolder_blacklist: %s\nfolder_blacklist_resolved: %s\nquiet: %s\nallow_scripts: %s\nproject_path: %s\nproject_exists: %t\nproject_workspace_globs: %s\nproject_workspace_globs_resolved: %s\nproject_folder_blacklist: %s\nproject_folder_blacklist_resolved: %s\neffective_workspace_globs: %s\neffective_folder_blacklist: %s\n",
+				safeDisplay(path),
+				loaded.UserExists,
+				displayConfigValues(loaded.RawUser.RootDirectories),
+				displayConfigValues(loaded.ResolvedUser.RootDirectories),
+				displayConfigValues(loaded.RawUser.WorkspaceGlobs),
+				displayConfigValues(loaded.ResolvedUser.WorkspaceGlobs),
+				displayConfigValues(loaded.RawUser.FolderBlacklist),
+				displayConfigValues(loaded.ResolvedUser.FolderBlacklist),
+				displayOptionalBool(loaded.RawUser.Quiet),
+				displayOptionalBool(loaded.RawUser.AllowScripts),
+				safeDisplay(projectPath),
+				loaded.ProjectExists,
+				displayConfigValues(loaded.RawProject.WorkspaceGlobs),
+				displayConfigValues(loaded.ResolvedProject.WorkspaceGlobs),
+				displayConfigValues(loaded.RawProject.FolderBlacklist),
+				displayConfigValues(loaded.ResolvedProject.FolderBlacklist),
+				displayConfigValues(loaded.Effective.WorkspaceGlobs),
+				displayConfigValues(loaded.Effective.FolderBlacklist),
 			)
 			return err
 		},
@@ -60,7 +63,11 @@ func displayConfigValues(values []string) string {
 		return "(not set)"
 	}
 
-	return strings.Join(values, ", ")
+	displayed := make([]string, len(values))
+	for index, value := range values {
+		displayed[index] = safeDisplay(value)
+	}
+	return strings.Join(displayed, ", ")
 }
 
 func displayOptionalBool(value *bool) string {

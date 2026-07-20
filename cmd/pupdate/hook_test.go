@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,22 +18,16 @@ import (
 
 func TestExecuteHookForegroundDelegatesToRun(t *testing.T) {
 	previousExecuteRunFn := executeRunFn
-	t.Cleanup(func() {
-		executeRunFn = previousExecuteRunFn
-	})
+	t.Cleanup(func() { executeRunFn = previousExecuteRunFn })
 
 	called := 0
-	executeRunFn = func(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRunFlag bool) error {
+	executeRunFn = func(_ *cobra.Command, quiet, allowScripts, dryRun bool) error {
 		called++
-		if !quietFlag {
-			t.Fatal("expected quiet flag to propagate to run execution")
-		}
-		if allowScriptsFlag {
-			t.Fatal("expected hook flow to preserve default allow-scripts behavior")
+		if !quiet || allowScripts || dryRun {
+			t.Fatalf("unexpected hook options: quiet=%t allow=%t dry=%t", quiet, allowScripts, dryRun)
 		}
 		return nil
 	}
-
 	if err := executeHook(&cobra.Command{}, true, false, false, ""); err != nil {
 		t.Fatalf("execute hook: %v", err)
 	}
@@ -41,228 +36,142 @@ func TestExecuteHookForegroundDelegatesToRun(t *testing.T) {
 	}
 }
 
-func TestExecuteHookAsyncSkipsWhenBackgroundRunAlreadyActive(t *testing.T) {
+func TestLaunchBackgroundHookOnlyLaunchesChild(t *testing.T) {
 	dir := t.TempDir()
 	withChdir(t, dir)
-	lockPath := backgroundHookLockPath(".")
-	if err := os.WriteFile(lockPath, []byte("busy\n"), 0o600); err != nil {
-		t.Fatalf("write lock file: %v", err)
-	}
-	now := time.Now()
-	if err := os.Chtimes(lockPath, now, now); err != nil {
-		t.Fatalf("touch lock file: %v", err)
-	}
-
-	var stderr bytes.Buffer
-	cmd := &cobra.Command{}
-	cmd.SetErr(&stderr)
-
-	if err := executeHook(cmd, false, true, false, ""); err != nil {
-		t.Fatalf("execute hook: %v", err)
-	}
-	if !strings.Contains(stderr.String(), "pupdate: skip repo (background run already active)") {
-		t.Fatalf("expected overlap status message, got %q", stderr.String())
-	}
-}
-
-func TestLaunchBackgroundHookStartsDetachedChild(t *testing.T) {
-	dir := t.TempDir()
-	withChdir(t, dir)
-
-	previousResolveExecutablePath := resolveExecutablePath
-	previousStartBackgroundProcess := startBackgroundProcess
+	previousResolve := resolveExecutablePath
+	previousStart := startBackgroundProcess
 	t.Cleanup(func() {
-		resolveExecutablePath = previousResolveExecutablePath
-		startBackgroundProcess = previousStartBackgroundProcess
+		resolveExecutablePath = previousResolve
+		startBackgroundProcess = previousStart
 	})
+	resolveExecutablePath = func() (string, error) { return "/fake/bin/pupdate", nil }
 
-	resolveExecutablePath = func() (string, error) {
-		return "/fake/bin/pupdate", nil
-	}
-
-	var startedExecutable string
-	var startedArgs []string
-	startBackgroundProcess = func(executable string, args []string, stderr io.Writer) (int, error) {
-		startedExecutable = executable
-		startedArgs = append([]string(nil), args...)
+	var executable string
+	var args []string
+	startBackgroundProcess = func(gotExecutable string, gotArgs []string, _ io.Writer) (int, error) {
+		executable = gotExecutable
+		args = append([]string(nil), gotArgs...)
 		return 1234, nil
 	}
-
 	cmd := &cobra.Command{}
 	cmd.SetErr(&bytes.Buffer{})
-
 	if err := launchBackgroundHook(cmd, true); err != nil {
 		t.Fatalf("launch background hook: %v", err)
 	}
-	if startedExecutable != "/fake/bin/pupdate" {
-		t.Fatalf("expected detached child to use current executable, got %q", startedExecutable)
+	if executable != "/fake/bin/pupdate" || !slices.Equal(args, []string{"hook", "--quiet", "--child"}) {
+		t.Fatalf("unexpected child launch: executable=%q args=%#v", executable, args)
 	}
-	if len(startedArgs) != 5 || startedArgs[0] != "hook" || startedArgs[1] != "--quiet" || startedArgs[2] != "--child" || startedArgs[3] != "--lock-file" {
-		t.Fatalf("unexpected detached child args: %#v", startedArgs)
-	}
-	if startedArgs[4] != filepath.Join(".", backgroundHookLockFileName) {
-		t.Fatalf("expected detached child lock file arg, got %#v", startedArgs)
-	}
-	lock, _, err := readBackgroundHookLock(filepath.Join(dir, backgroundHookLockFileName))
-	if err != nil {
-		t.Fatalf("expected background hook lock to be readable, err=%v", err)
-	}
-	if lock.PID != 1234 {
-		t.Fatalf("expected background hook lock pid to match child pid, got %#v", lock)
+	if _, err := os.Stat(filepath.Join(dir, backgroundHookLockFileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("async parent must not create the repository lock, err=%v", err)
 	}
 }
 
-func TestLaunchBackgroundHookPreservesNonQuietChildMode(t *testing.T) {
+func TestLaunchBackgroundHookReturnsStartFailure(t *testing.T) {
+	previousResolve := resolveExecutablePath
+	previousStart := startBackgroundProcess
+	t.Cleanup(func() {
+		resolveExecutablePath = previousResolve
+		startBackgroundProcess = previousStart
+	})
+	resolveExecutablePath = func() (string, error) { return "/fake/bin/pupdate", nil }
+	startBackgroundProcess = func(string, []string, io.Writer) (int, error) { return 0, errors.New("boom") }
+	err := launchBackgroundHook(&cobra.Command{}, true)
+	if err == nil || !strings.Contains(err.Error(), "failed to start background hook: boom") {
+		t.Fatalf("unexpected launch error: %v", err)
+	}
+}
+
+func TestRepositoryLockTreatsUnlockedLegacyPIDFileAsIdle(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, backgroundHookLockFileName)
+	legacy := []byte("123\npid=999999\n")
+	if err := os.WriteFile(lockPath, legacy, 0o600); err != nil {
+		t.Fatalf("write legacy lock: %v", err)
+	}
+
+	lock, acquired, err := acquireRepositoryLock(dir)
+	if err != nil || !acquired {
+		t.Fatalf("acquire unlocked legacy lock: acquired=%t err=%v", acquired, err)
+	}
+	if err := lock.release(); err != nil {
+		t.Fatalf("release lock: %v", err)
+	}
+	raw, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatalf("read persistent lock: %v", err)
+	}
+	if !bytes.Equal(raw, legacy) {
+		t.Fatalf("expected legacy contents to remain irrelevant, got %q", raw)
+	}
+	_, status, err := currentBackgroundHookStatus(dir, time.Now())
+	if err != nil || status != "idle" {
+		t.Fatalf("expected released legacy file to be idle, status=%q err=%v", status, err)
+	}
+}
+
+func TestRepositoryLockReportsContentionAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	first, acquired, err := acquireRepositoryLock(dir)
+	if err != nil || !acquired {
+		t.Fatalf("acquire first lock: acquired=%t err=%v", acquired, err)
+	}
+	_, acquired, err = acquireRepositoryLock(dir)
+	if err != nil || acquired {
+		t.Fatalf("expected second acquisition to contend: acquired=%t err=%v", acquired, err)
+	}
+	_, status, err := currentBackgroundHookStatus(dir, time.Now())
+	if err != nil || status != "active" {
+		t.Fatalf("expected active status, status=%q err=%v", status, err)
+	}
+	if err := first.release(); err != nil {
+		t.Fatalf("release first lock: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, backgroundHookLockFileName)); err != nil {
+		t.Fatalf("coordination file should remain after release: %v", err)
+	}
+}
+
+func TestManualRunAndResetFailOnRepositoryLockContention(t *testing.T) {
 	dir := t.TempDir()
 	withChdir(t, dir)
-
-	previousResolveExecutablePath := resolveExecutablePath
-	previousStartBackgroundProcess := startBackgroundProcess
-	t.Cleanup(func() {
-		resolveExecutablePath = previousResolveExecutablePath
-		startBackgroundProcess = previousStartBackgroundProcess
-	})
-
-	resolveExecutablePath = func() (string, error) {
-		return "/fake/bin/pupdate", nil
+	lock, acquired, err := acquireRepositoryLock(dir)
+	if err != nil || !acquired {
+		t.Fatalf("acquire lock: acquired=%t err=%v", acquired, err)
 	}
+	t.Cleanup(func() { _ = lock.release() })
 
-	var startedArgs []string
-	startBackgroundProcess = func(executable string, args []string, stderr io.Writer) (int, error) {
-		startedArgs = append([]string(nil), args...)
-		return 4321, nil
-	}
-
-	cmd := &cobra.Command{}
-	cmd.SetErr(&bytes.Buffer{})
-
-	if err := launchBackgroundHook(cmd, false); err != nil {
-		t.Fatalf("launch background hook: %v", err)
-	}
-	for _, arg := range startedArgs {
-		if arg == "--quiet" {
-			t.Fatalf("expected non-quiet async hook to preserve child verbosity, got %#v", startedArgs)
+	for _, args := range [][]string{{"run"}, {"reset"}} {
+		cmd := newRootCmd()
+		cmd.SetArgs(args)
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "another pupdate operation is already active") {
+			t.Fatalf("expected %v to fail on contention, got %v", args, err)
 		}
 	}
 }
 
-func TestLaunchBackgroundHookRemovesLockWhenStartFails(t *testing.T) {
+func TestQuietHookSkipsRepositoryLockContention(t *testing.T) {
 	dir := t.TempDir()
 	withChdir(t, dir)
+	lock, acquired, err := acquireRepositoryLock(dir)
+	if err != nil || !acquired {
+		t.Fatalf("acquire lock: acquired=%t err=%v", acquired, err)
+	}
+	t.Cleanup(func() { _ = lock.release() })
 
-	previousResolveExecutablePath := resolveExecutablePath
-	previousStartBackgroundProcess := startBackgroundProcess
-	t.Cleanup(func() {
-		resolveExecutablePath = previousResolveExecutablePath
-		startBackgroundProcess = previousStartBackgroundProcess
-	})
-
-	resolveExecutablePath = func() (string, error) {
-		return "/fake/bin/pupdate", nil
+	var stderr bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"hook", "--quiet", "--child"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("quiet hook contention should be a successful skip: %v", err)
 	}
-	startBackgroundProcess = func(string, []string, io.Writer) (int, error) {
-		return 0, errors.New("boom")
-	}
-
-	cmd := &cobra.Command{}
-	cmd.SetErr(&bytes.Buffer{})
-
-	err := launchBackgroundHook(cmd, true)
-	if err == nil {
-		t.Fatalf("expected background hook launch to fail")
-	}
-	if !strings.Contains(err.Error(), "failed to start background hook: boom") {
-		t.Fatalf("unexpected launch error: %v", err)
-	}
-	if _, statErr := os.Stat(filepath.Join(dir, backgroundHookLockFileName)); !errors.Is(statErr, os.ErrNotExist) {
-		t.Fatalf("expected failed launch to clean up lock file, err=%v", statErr)
-	}
-}
-
-func TestClaimBackgroundHookLockTreatsOldLockAsStale(t *testing.T) {
-	dir := t.TempDir()
-	lockPath := filepath.Join(dir, backgroundHookLockFileName)
-	if err := os.WriteFile(lockPath, []byte("old\n"), 0o600); err != nil {
-		t.Fatalf("write lock file: %v", err)
-	}
-	old := time.Now().Add(-backgroundHookStaleAfter - time.Minute)
-	if err := os.Chtimes(lockPath, old, old); err != nil {
-		t.Fatalf("touch lock file: %v", err)
-	}
-
-	claimed, err := claimBackgroundHookLock(lockPath, time.Now())
-	if err != nil {
-		t.Fatalf("claim lock: %v", err)
-	}
-	if !claimed {
-		t.Fatal("expected stale lock to be replaced")
-	}
-}
-
-func TestClaimBackgroundHookLockKeepsRunningProcessLockActive(t *testing.T) {
-	dir := t.TempDir()
-	lockPath := filepath.Join(dir, backgroundHookLockFileName)
-	old := time.Now().Add(-backgroundHookStaleAfter - time.Minute)
-	if err := writeBackgroundHookLock(lockPath, backgroundHookLock{ClaimedAtUnix: old.Unix(), PID: os.Getpid()}); err != nil {
-		t.Fatalf("write lock file: %v", err)
-	}
-	if err := os.Chtimes(lockPath, old, old); err != nil {
-		t.Fatalf("touch lock file: %v", err)
-	}
-
-	claimed, err := claimBackgroundHookLock(lockPath, time.Now())
-	if err != nil {
-		t.Fatalf("claim lock: %v", err)
-	}
-	if claimed {
-		t.Fatal("expected running process lock to remain active")
-	}
-}
-
-func TestCurrentBackgroundHookStatusReportsRunningPidAsActive(t *testing.T) {
-	dir := t.TempDir()
-	old := time.Now().Add(-backgroundHookStaleAfter - time.Minute)
-	lockPath := filepath.Join(dir, backgroundHookLockFileName)
-	if err := writeBackgroundHookLock(lockPath, backgroundHookLock{ClaimedAtUnix: old.Unix(), PID: os.Getpid()}); err != nil {
-		t.Fatalf("write lock file: %v", err)
-	}
-	if err := os.Chtimes(lockPath, old, old); err != nil {
-		t.Fatalf("touch lock file: %v", err)
-	}
-
-	gotPath, status, err := currentBackgroundHookStatus(dir, time.Now())
-	if err != nil {
-		t.Fatalf("current background hook status: %v", err)
-	}
-	if gotPath != lockPath {
-		t.Fatalf("expected lock path %q, got %q", lockPath, gotPath)
-	}
-	if status != "active" {
-		t.Fatalf("expected running pid lock to stay active, got %q", status)
-	}
-}
-
-func TestExecuteHookChildRemovesLockFileAfterRun(t *testing.T) {
-	dir := t.TempDir()
-	lockPath := filepath.Join(dir, backgroundHookLockFileName)
-	if err := os.WriteFile(lockPath, []byte("busy\n"), 0o600); err != nil {
-		t.Fatalf("write lock file: %v", err)
-	}
-
-	previousExecuteRunFn := executeRunFn
-	t.Cleanup(func() {
-		executeRunFn = previousExecuteRunFn
-	})
-	executeRunFn = func(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRunFlag bool) error {
-		return errors.New("run failed")
-	}
-
-	err := executeHook(&cobra.Command{}, true, false, true, lockPath)
-	if err == nil || !strings.Contains(err.Error(), "run failed") {
-		t.Fatalf("expected child hook to return run error, got %v", err)
-	}
-	if _, statErr := os.Stat(lockPath); !errors.Is(statErr, os.ErrNotExist) {
-		t.Fatalf("expected child hook to remove lock file, err=%v", statErr)
+	if stderr.Len() != 0 {
+		t.Fatalf("quiet hook contention should be silent, got %q", stderr.String())
 	}
 }
 
@@ -270,64 +179,29 @@ func TestExecuteHookQuietChildSuppressesSuccessfulUpdateStatus(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "package-lock.json")
 	withChdir(t, dir)
-
 	t.Cleanup(func() {
 		lookPath = exec.LookPath
 		execCommand = exec.CommandContext
 	})
-	lookPath = func(file string) (string, error) {
-		return file, nil
-	}
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+	lookPath = func(file string) (string, error) { return file, nil }
+	execCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "true")
 	}
 
 	var stderr bytes.Buffer
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"hook", "--quiet", "--child", "--lock-file", filepath.Join(dir, backgroundHookLockFileName)})
+	cmd.SetArgs([]string{"hook", "--quiet", "--child"})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&stderr)
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("execute quiet child hook: %v", err)
 	}
 	if stderr.Len() != 0 {
-		t.Fatalf("expected successful quiet child hook not to overwrite the shell prompt, got %q", stderr.String())
+		t.Fatalf("expected successful quiet child hook to be silent, got %q", stderr.String())
 	}
 }
 
-func TestExecuteHookQuietChildStillPrintsInstallErrors(t *testing.T) {
-	dir := t.TempDir()
-	writeFixtureFiles(t, dir, "package-lock.json")
-	withChdir(t, dir)
-
-	t.Cleanup(func() {
-		lookPath = exec.LookPath
-		execCommand = exec.CommandContext
-	})
-	lookPath = func(file string) (string, error) {
-		return file, nil
-	}
-	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "false")
-	}
-
-	var stderr bytes.Buffer
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"hook", "--quiet", "--child", "--lock-file", filepath.Join(dir, backgroundHookLockFileName)})
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&stderr)
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("execute quiet child hook: %v", err)
-	}
-	if !strings.Contains(stderr.String(), "pupdate: error npm install failed") {
-		t.Fatalf("expected quiet child hook to retain install errors, got %q", stderr.String())
-	}
-	if strings.Contains(stderr.String(), "pupdate: run npm") {
-		t.Fatalf("expected quiet child hook to suppress routine run status, got %q", stderr.String())
-	}
-}
-
-func TestHookChildPrintsConfigParseErrorWithoutUsage(t *testing.T) {
+func TestHookChildReturnsConfigParseErrorWithoutUsage(t *testing.T) {
 	configHome := t.TempDir()
 	projectDir := t.TempDir()
 	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
@@ -337,8 +211,7 @@ func TestHookChildPrintsConfigParseErrorWithoutUsage(t *testing.T) {
 	}
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	withChdir(t, projectDir)
-
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"hook", "--child", "--lock-file", filepath.Join(projectDir, backgroundHookLockFileName)})
+	cmd.SetArgs([]string{"hook", "--child"})
 	assertExecuteCmdShowsErrorWithoutUsage(t, cmd, "pupdate: error: failed to parse "+configPath)
 }

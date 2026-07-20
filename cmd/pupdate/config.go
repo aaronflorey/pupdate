@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,7 +13,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const configFileName = "config.yaml"
+const (
+	configFileName        = "config.yaml"
+	projectConfigFileName = ".pupdate.yaml"
+)
 
 type userConfig struct {
 	RootDirectories []string `yaml:"root_directories"`
@@ -19,6 +24,11 @@ type userConfig struct {
 	FolderBlacklist []string `yaml:"folder_blacklist"`
 	Quiet           *bool    `yaml:"quiet"`
 	AllowScripts    *bool    `yaml:"allow_scripts"`
+}
+
+type projectConfig struct {
+	WorkspaceGlobs  []string `yaml:"workspace_globs"`
+	FolderBlacklist []string `yaml:"folder_blacklist"`
 }
 
 var userConfigDir = os.UserConfigDir
@@ -74,11 +84,42 @@ func readUserConfig(path string) (userConfig, error) {
 	}
 
 	var cfg userConfig
-	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+	if err := decodeConfigYAML(raw, &cfg); err != nil {
 		return userConfig{}, fmt.Errorf("failed to parse %s: %w", path, err)
 	}
 
 	return cfg, nil
+}
+
+func readProjectConfig(path string) (projectConfig, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return projectConfig{}, nil
+		}
+		return projectConfig{}, fmt.Errorf("failed to read %s: %w", path, err)
+	}
+
+	var cfg projectConfig
+	if err := decodeConfigYAML(raw, &cfg); err != nil {
+		return projectConfig{}, fmt.Errorf("failed to parse %s: %w", path, err)
+	}
+	return cfg, nil
+}
+
+func decodeConfigYAML(raw []byte, destination any) error {
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(destination); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err == nil {
+		return fmt.Errorf("multiple YAML documents are not supported")
+	} else if !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
 }
 
 func resolveUserConfig(cfg userConfig) (userConfig, error) {
@@ -128,6 +169,41 @@ func resolveUserConfig(cfg userConfig) (userConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+func resolveProjectConfig(cfg projectConfig) (projectConfig, error) {
+	resolved, err := resolveUserConfig(userConfig{
+		WorkspaceGlobs:  cfg.WorkspaceGlobs,
+		FolderBlacklist: cfg.FolderBlacklist,
+	})
+	if err != nil {
+		return projectConfig{}, err
+	}
+	return projectConfig{
+		WorkspaceGlobs:  resolved.WorkspaceGlobs,
+		FolderBlacklist: resolved.FolderBlacklist,
+	}, nil
+}
+
+func mergeUserAndProjectConfig(user userConfig, project projectConfig) userConfig {
+	user.WorkspaceGlobs = stableUnion(user.WorkspaceGlobs, project.WorkspaceGlobs)
+	user.FolderBlacklist = stableUnion(user.FolderBlacklist, project.FolderBlacklist)
+	return user
+}
+
+func stableUnion(first []string, second []string) []string {
+	result := make([]string, 0, len(first)+len(second))
+	seen := make(map[string]struct{}, len(first)+len(second))
+	for _, values := range [][]string{first, second} {
+		for _, value := range values {
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func loadUserConfig() (userConfig, error) {

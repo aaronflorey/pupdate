@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/freshness"
@@ -295,6 +294,9 @@ func TestStatusPassesResolvedDetectionOptionsToDetection(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte("workspace_globs:\n  - ' apps/* '\n  - ./services/*\nfolder_blacklist:\n  - ' blah '\n  - vendor\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, projectConfigFileName), []byte("workspace_globs: [services/*, packages/*]\nfolder_blacklist: [dist, vendor]\n"), 0o644); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	withChdir(t, dir)
 
@@ -331,30 +333,108 @@ func TestStatusPassesResolvedDetectionOptionsToDetection(t *testing.T) {
 	if gotDir != "." {
 		t.Fatalf("expected detectFn dir to be '.', got %q", gotDir)
 	}
-	if !slices.Equal(gotOptions.WorkspaceGlobs, []string{"apps/*", "services/*"}) {
+	if !slices.Equal(gotOptions.WorkspaceGlobs, []string{"apps/*", "services/*", "packages/*"}) {
 		t.Fatalf("expected resolved workspace globs, got %#v", gotOptions.WorkspaceGlobs)
 	}
-	if !slices.Equal(gotOptions.FolderBlacklist, []string{"blah", "vendor"}) {
+	if !slices.Equal(gotOptions.FolderBlacklist, []string{"blah", "vendor", "dist"}) {
 		t.Fatalf("expected resolved folder blacklist, got %#v", gotOptions.FolderBlacklist)
 	}
 	if !strings.Contains(stdout.String(), "run_status: idle") {
 		t.Fatalf("expected idle status when detector returns nothing, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "project_config_exists: true") || !strings.Contains(stdout.String(), "effective_workspace_globs: apps/*, services/*, packages/*") {
+		t.Fatalf("expected project and effective config fields, got %q", stdout.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
 	}
 }
 
+func TestStatusInstallDisabledMatchesRunPolicyAndShowsLastSuccess(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock")
+	withChdir(t, dir)
+	t.Setenv("PUPDATE_SKIP_INSTALL", "1")
+
+	seed := state.Empty()
+	seed.Ecosystems["node"] = state.EcosystemState{
+		LastSuccessAt: "2026-07-20T12:34:56Z",
+		Lockfiles:     map[string]string{"bun.lock": "outdated"},
+	}
+	if err := state.NewStore(dir).Save(seed); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	previousLookPath := lookPath
+	t.Cleanup(func() { lookPath = previousLookPath })
+	lookPathCalls := 0
+	lookPath = func(string) (string, error) {
+		lookPathCalls++
+		return "", errors.New("must not be called while installs are disabled")
+	}
+
+	var stdout bytes.Buffer
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("status command failed: %v", err)
+	}
+	out := stdout.String()
+	for _, expected := range []string{
+		"run_status: disabled",
+		"install_status: disabled",
+		"install_reason: installs disabled via PUPDATE_SKIP_INSTALL",
+		"last_success_at: 2026-07-20T12:34:56Z",
+	} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("expected %q in disabled status output, got %q", expected, out)
+		}
+	}
+	if lookPathCalls != 0 {
+		t.Fatalf("disabled action must precede manager lookup, got %d calls", lookPathCalls)
+	}
+}
+
+func TestWriteStatusSnapshotQuotesRepositoryControlCharacters(t *testing.T) {
+	snapshot := statusSnapshot{
+		WorkingDirectory: "repo\x1b[31m",
+		RunStatus:        "ready",
+		RunReason:        "needs\nupdate",
+		HookLockPath:     ".pupdate.hook.lock",
+		HookLockStatus:   "idle",
+		Targets: []statusTarget{{
+			Name:            "node\nforged",
+			Directory:       "packages/\x7fweb",
+			MatchedFiles:    []string{"packages/\n/package-lock.json"},
+			Freshness:       "update",
+			FreshnessReason: "changed",
+			InstallStatus:   "blocked",
+			ManagerPath:     "/tmp/bin\x1b[2J",
+		}},
+		DetectedTargets: 1,
+	}
+	var output bytes.Buffer
+	if err := writeStatusSnapshot(&output, snapshot); err != nil {
+		t.Fatalf("write status: %v", err)
+	}
+	out := output.String()
+	for _, expected := range []string{`"repo\x1b[31m"`, `"needs\nupdate"`, `"node\nforged"`, `"packages/\x7fweb"`, `"/tmp/bin\x1b[2J"`} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("expected safely quoted %q in %q", expected, out)
+		}
+	}
+}
+
 func TestStatusShowsActiveBackgroundHookLock(t *testing.T) {
 	dir := t.TempDir()
-	writeFixtureFiles(t, dir, backgroundHookLockFileName)
 	withChdir(t, dir)
-
-	now := time.Now()
-	lockPath := filepath.Join(dir, backgroundHookLockFileName)
-	if err := os.Chtimes(lockPath, now, now); err != nil {
-		t.Fatalf("touch lock file: %v", err)
+	lock, acquired, err := acquireRepositoryLock(dir)
+	if err != nil || !acquired {
+		t.Fatalf("acquire repository lock: acquired=%t err=%v", acquired, err)
 	}
+	t.Cleanup(func() { _ = lock.release() })
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -403,6 +483,33 @@ func TestStatusReturnsConfigParseErrorWhenYAMLIsInvalid(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to parse "+configPath) {
 		t.Fatalf("expected parse error with config path, got %q", err.Error())
+	}
+}
+
+func TestStatusRejectsForbiddenProjectPolicyBeforeDetection(t *testing.T) {
+	dir := t.TempDir()
+	withChdir(t, dir)
+	if err := os.WriteFile(filepath.Join(dir, projectConfigFileName), []byte("quiet: true\n"), 0o600); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+	previousDetect := detectFn
+	t.Cleanup(func() { detectFn = previousDetect })
+	detectCalls := 0
+	detectFn = func(string, detection.Options) ([]detection.DetectionResult, error) {
+		detectCalls++
+		return nil, nil
+	}
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "field quiet not found") {
+		t.Fatalf("expected forbidden project policy error, got %v", err)
+	}
+	if detectCalls != 0 {
+		t.Fatalf("project policy must fail before detection, got %d calls", detectCalls)
 	}
 }
 

@@ -89,3 +89,35 @@ func TestExecuteCmdSuppressesUsageForRuntimeErrors(t *testing.T) {
 		t.Fatalf("expected exactly one formatted error message, got %q", output)
 	}
 }
+
+func TestSafeDisplayPreservesOrdinaryTextAndQuotesControls(t *testing.T) {
+	if got := safeDisplay("packages/web – ready"); got != "packages/web – ready" {
+		t.Fatalf("ordinary output changed: %q", got)
+	}
+	for _, value := range []string{"line\nbreak", "escape\x1b[2J", "delete\x7fbyte"} {
+		got := safeDisplay(value)
+		if !strings.HasPrefix(got, `"`) || !strings.HasSuffix(got, `"`) {
+			t.Fatalf("expected %q to be quoted, got %q", value, got)
+		}
+		if strings.Contains(got, "\n") || strings.ContainsRune(got, '\x1b') || strings.ContainsRune(got, '\x7f') {
+			t.Fatalf("quoted display still contains raw controls: %q", got)
+		}
+	}
+}
+
+func TestExecuteCmdQuotesControlCharactersInFinalError(t *testing.T) {
+	cmd := &cobra.Command{
+		Use: "test",
+		RunE: func(*cobra.Command, []string) error {
+			return errors.New("invalid repo\nname")
+		},
+	}
+	var stderr bytes.Buffer
+	cmd.SetErr(&stderr)
+	if code := executeCmd(cmd); code != 1 {
+		t.Fatalf("expected exit code 1, got %d", code)
+	}
+	if got := stderr.String(); got != "pupdate: error: \"invalid repo\\nname\"\n" {
+		t.Fatalf("unexpected safe final error: %q", got)
+	}
+}

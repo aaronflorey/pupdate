@@ -11,22 +11,27 @@ import (
 )
 
 type statusSnapshot struct {
-	WorkingDirectory string
-	RunStatus        string
-	RunReason        string
-	RunGuidance      []string
-	RunOptions       runOptions
-	HookLockPath     string
-	HookLockStatus   string
-	ConfigPath       string
-	ConfigExists     bool
-	RawConfig        userConfig
-	ResolvedConfig   userConfig
-	StatePath        string
-	StateExists      bool
-	StateWarnings    []string
-	Targets          []statusTarget
-	DetectedTargets  int
+	WorkingDirectory      string
+	RunStatus             string
+	RunReason             string
+	RunGuidance           []string
+	RunOptions            runOptions
+	HookLockPath          string
+	HookLockStatus        string
+	ConfigPath            string
+	ConfigExists          bool
+	RawConfig             userConfig
+	ResolvedUserConfig    userConfig
+	ProjectConfigPath     string
+	ProjectConfigExists   bool
+	RawProjectConfig      projectConfig
+	ResolvedProjectConfig projectConfig
+	ResolvedConfig        userConfig
+	StatePath             string
+	StateExists           bool
+	StateWarnings         []string
+	Targets               []statusTarget
+	DetectedTargets       int
 }
 
 type statusTarget struct {
@@ -37,6 +42,7 @@ type statusTarget struct {
 	Warnings        []string
 	Freshness       string
 	FreshnessReason string
+	LastSuccessAt   string
 	InstallStatus   string
 	InstallReason   string
 	InstallCommand  string
@@ -69,15 +75,20 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 	}
 
 	snapshot := statusSnapshot{
-		WorkingDirectory: preflight.WorkingDirectory,
-		RunOptions:       resolveRunOptions(nil, preflight.ResolvedConfig, false, false),
-		ConfigPath:       preflight.ConfigPath,
-		ConfigExists:     preflight.ConfigExists,
-		RawConfig:        preflight.RawConfig,
-		ResolvedConfig:   preflight.ResolvedConfig,
-		StatePath:        preflight.StatePath,
-		StateExists:      preflight.StateExists,
-		StateWarnings:    preflight.StateWarnings,
+		WorkingDirectory:      preflight.WorkingDirectory,
+		RunOptions:            resolveRunOptions(nil, preflight.ResolvedConfig, false, false),
+		ConfigPath:            preflight.ConfigPath,
+		ConfigExists:          preflight.ConfigExists,
+		RawConfig:             preflight.RawConfig,
+		ResolvedUserConfig:    preflight.ResolvedUserConfig,
+		ProjectConfigPath:     preflight.ProjectConfigPath,
+		ProjectConfigExists:   preflight.ProjectConfigExists,
+		RawProjectConfig:      preflight.RawProjectConfig,
+		ResolvedProjectConfig: preflight.ResolvedProjectConfig,
+		ResolvedConfig:        preflight.ResolvedConfig,
+		StatePath:             preflight.StatePath,
+		StateExists:           preflight.StateExists,
+		StateWarnings:         preflight.StateWarnings,
 	}
 
 	hookLockPath, hookLockStatus, err := currentBackgroundHookStatus(".", backgroundHookNow())
@@ -94,13 +105,15 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 		return snapshot, nil
 	}
 
+	installDisabled := isInstallDisabled()
 	targets := make([]statusTarget, 0, len(preflight.Results))
 	for _, result := range preflight.Results {
 		decision, ok := preflight.DecisionByEcosystem[result.StateKey()]
 		if !ok {
 			continue
 		}
-		targets = append(targets, buildStatusTarget(result, decision, snapshot.RunOptions.AllowScripts))
+		lastSuccessAt := preflight.CurrentState.Ecosystems[result.StateKey()].LastSuccessAt
+		targets = append(targets, buildStatusTarget(result, decision, snapshot.RunOptions.AllowScripts, installDisabled, lastSuccessAt))
 	}
 
 	snapshot.Targets = targets
@@ -143,7 +156,7 @@ func statusSkipReason(reason preflightSkipReason) string {
 	}
 }
 
-func buildStatusTarget(result detection.DetectionResult, decision freshness.EcosystemDecision, allowScripts bool) statusTarget {
+func buildStatusTarget(result detection.DetectionResult, decision freshness.EcosystemDecision, allowScripts bool, installDisabled bool, lastSuccessAt string) statusTarget {
 	target := statusTarget{
 		Name:            resultTarget(result),
 		Directory:       result.Directory,
@@ -152,32 +165,35 @@ func buildStatusTarget(result detection.DetectionResult, decision freshness.Ecos
 		Warnings:        detectionWarnings(result.Warnings),
 		Freshness:       string(decision.Decision),
 		FreshnessReason: decision.Reason,
+		LastSuccessAt:   lastSuccessAt,
 	}
-
-	if decision.Decision != freshness.DecisionUpdate {
+	action := effectiveActionFor(result, decision, allowScripts, installDisabled)
+	if action.Kind == effectiveActionUnchanged {
 		target.InstallStatus = "skip"
 		target.InstallReason = decision.Reason
 		return target
 	}
-
-	plan, ok, reason := selectManagerPlan(result, allowScripts)
-	if !ok {
-		target.InstallStatus = "blocked"
-		target.InstallReason = reason
+	if action.Kind == effectiveActionDisabled {
+		target.InstallStatus = "disabled"
+		target.InstallReason = action.Reason
 		return target
 	}
-
-	target.InstallCommand = strings.TrimPrefix(formatRunLine(result, plan), "pupdate: run ")
-	managerPath, err := lookPath(plan.Manager)
-	if err != nil {
+	if action.Plan.Manager != "" {
+		target.InstallCommand = strings.TrimPrefix(formatRunLine(result, action.Plan), "pupdate: run ")
+	}
+	if action.Kind == effectiveActionPolicyBlocked {
 		target.InstallStatus = "blocked"
-		target.InstallReason = fmt.Sprintf("%s not found on PATH", plan.Manager)
-		target.InstallGuidance = []string{fmt.Sprintf("install %s or add it to PATH, then rerun pupdate status", plan.Manager)}
+		target.InstallReason = action.Reason
 		return target
 	}
-
+	if action.Kind == effectiveActionManagerMissing {
+		target.InstallStatus = "blocked"
+		target.InstallReason = action.Reason
+		target.InstallGuidance = []string{fmt.Sprintf("install %s or add it to PATH, then rerun pupdate status", action.Plan.Manager)}
+		return target
+	}
 	target.InstallStatus = "ready"
-	target.ManagerPath = managerPath
+	target.ManagerPath = action.ManagerPath
 	return target
 }
 
@@ -200,6 +216,7 @@ func summarizeStatusTargets(targets []statusTarget) (string, string, []string) {
 
 	readyCount := 0
 	blockedCount := 0
+	disabledCount := 0
 	policyBlockedCount := 0
 	for _, target := range targets {
 		switch target.InstallStatus {
@@ -210,12 +227,17 @@ func summarizeStatusTargets(targets []statusTarget) (string, string, []string) {
 			if strings.Contains(target.InstallReason, "--allow-scripts") {
 				policyBlockedCount++
 			}
+		case "disabled":
+			disabledCount++
 		}
 	}
 
 	policyGuidance := []string(nil)
 	if policyBlockedCount > 0 {
 		policyGuidance = []string{"rerun with --allow-scripts, or set allow_scripts: true in config to allow Python installs"}
+	}
+	if disabledCount > 0 {
+		return "disabled", fmt.Sprintf("%s but installs are disabled via PUPDATE_SKIP_INSTALL", formatEcosystemNeedCount(disabledCount)), []string{"unset PUPDATE_SKIP_INSTALL to allow installs"}
 	}
 
 	if readyCount > 0 && blockedCount > 0 {
@@ -247,20 +269,20 @@ func formatEcosystemNeedCount(count int) string {
 }
 
 func writeStatusSnapshot(w io.Writer, snapshot statusSnapshot) error {
-	if _, err := fmt.Fprintf(w, "working_directory: %s\n", snapshot.WorkingDirectory); err != nil {
+	if _, err := fmt.Fprintf(w, "working_directory: %s\n", safeDisplay(snapshot.WorkingDirectory)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "run_status: %s\n", snapshot.RunStatus); err != nil {
+	if _, err := fmt.Fprintf(w, "run_status: %s\n", safeDisplay(snapshot.RunStatus)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "run_reason: %s\n\n", snapshot.RunReason); err != nil {
+	if _, err := fmt.Fprintf(w, "run_reason: %s\n\n", safeDisplay(snapshot.RunReason)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "run_guidance: %s\n\n", displayStatusValues(snapshot.RunGuidance, "(none)")); err != nil {
 		return err
 	}
 
-	if _, err := fmt.Fprintf(w, "config_path: %s\n", snapshot.ConfigPath); err != nil {
+	if _, err := fmt.Fprintf(w, "config_path: %s\n", safeDisplay(snapshot.ConfigPath)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "config_exists: %t\n", snapshot.ConfigExists); err != nil {
@@ -269,7 +291,19 @@ func writeStatusSnapshot(w io.Writer, snapshot statusSnapshot) error {
 	if _, err := fmt.Fprintf(w, "root_directories: %s\n", displayConfigValues(snapshot.RawConfig.RootDirectories)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "root_directories_resolved: %s\n", displayConfigValues(snapshot.ResolvedConfig.RootDirectories)); err != nil {
+	if _, err := fmt.Fprintf(w, "root_directories_resolved: %s\n", displayConfigValues(snapshot.ResolvedUserConfig.RootDirectories)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "workspace_globs: %s\n", displayConfigValues(snapshot.RawConfig.WorkspaceGlobs)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "workspace_globs_resolved: %s\n", displayConfigValues(snapshot.ResolvedUserConfig.WorkspaceGlobs)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "folder_blacklist: %s\n", displayConfigValues(snapshot.RawConfig.FolderBlacklist)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "folder_blacklist_resolved: %s\n", displayConfigValues(snapshot.ResolvedUserConfig.FolderBlacklist)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "quiet: %s\n", displayOptionalBool(snapshot.RawConfig.Quiet)); err != nil {
@@ -281,17 +315,41 @@ func writeStatusSnapshot(w io.Writer, snapshot statusSnapshot) error {
 	if _, err := fmt.Fprintf(w, "effective_quiet: %t\n", snapshot.RunOptions.Quiet); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "effective_allow_scripts: %t\n\n", snapshot.RunOptions.AllowScripts); err != nil {
+	if _, err := fmt.Fprintf(w, "effective_allow_scripts: %t\n", snapshot.RunOptions.AllowScripts); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "background_hook_lock_path: %s\n", snapshot.HookLockPath); err != nil {
+	if _, err := fmt.Fprintf(w, "project_config_path: %s\n", safeDisplay(snapshot.ProjectConfigPath)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "background_hook_lock_status: %s\n\n", snapshot.HookLockStatus); err != nil {
+	if _, err := fmt.Fprintf(w, "project_config_exists: %t\n", snapshot.ProjectConfigExists); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "project_workspace_globs: %s\n", displayConfigValues(snapshot.RawProjectConfig.WorkspaceGlobs)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "project_workspace_globs_resolved: %s\n", displayConfigValues(snapshot.ResolvedProjectConfig.WorkspaceGlobs)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "project_folder_blacklist: %s\n", displayConfigValues(snapshot.RawProjectConfig.FolderBlacklist)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "project_folder_blacklist_resolved: %s\n", displayConfigValues(snapshot.ResolvedProjectConfig.FolderBlacklist)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "effective_workspace_globs: %s\n", displayConfigValues(snapshot.ResolvedConfig.WorkspaceGlobs)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "effective_folder_blacklist: %s\n\n", displayConfigValues(snapshot.ResolvedConfig.FolderBlacklist)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "background_hook_lock_path: %s\n", safeDisplay(snapshot.HookLockPath)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "background_hook_lock_status: %s\n\n", safeDisplay(snapshot.HookLockStatus)); err != nil {
 		return err
 	}
 
-	if _, err := fmt.Fprintf(w, "state_path: %s\n", snapshot.StatePath); err != nil {
+	if _, err := fmt.Fprintf(w, "state_path: %s\n", safeDisplay(snapshot.StatePath)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "state_exists: %t\n", snapshot.StateExists); err != nil {
@@ -305,7 +363,7 @@ func writeStatusSnapshot(w io.Writer, snapshot statusSnapshot) error {
 		return err
 	}
 	for _, target := range snapshot.Targets {
-		if _, err := fmt.Fprintf(w, "\n[%s]\n", target.Name); err != nil {
+		if _, err := fmt.Fprintf(w, "\n[%s]\n", safeDisplay(target.Name)); err != nil {
 			return err
 		}
 		if _, err := fmt.Fprintf(w, "directory: %s\n", displayDirectoryValue(target.Directory)); err != nil {
@@ -320,13 +378,16 @@ func writeStatusSnapshot(w io.Writer, snapshot statusSnapshot) error {
 		if _, err := fmt.Fprintf(w, "warnings: %s\n", displayStatusValues(target.Warnings, "(none)")); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintf(w, "freshness: %s\n", target.Freshness); err != nil {
+		if _, err := fmt.Fprintf(w, "freshness: %s\n", safeDisplay(target.Freshness)); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintf(w, "freshness_reason: %s\n", target.FreshnessReason); err != nil {
+		if _, err := fmt.Fprintf(w, "freshness_reason: %s\n", safeDisplay(target.FreshnessReason)); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintf(w, "install_status: %s\n", target.InstallStatus); err != nil {
+		if _, err := fmt.Fprintf(w, "last_success_at: %s\n", displayStatusValue(target.LastSuccessAt)); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(w, "install_status: %s\n", safeDisplay(target.InstallStatus)); err != nil {
 			return err
 		}
 		if _, err := fmt.Fprintf(w, "install_reason: %s\n", displayStatusValue(target.InstallReason)); err != nil {
@@ -350,19 +411,23 @@ func displayStatusValues(values []string, empty string) string {
 	if len(values) == 0 {
 		return empty
 	}
-	return strings.Join(values, ", ")
+	displayed := make([]string, len(values))
+	for index, value := range values {
+		displayed[index] = safeDisplay(value)
+	}
+	return strings.Join(displayed, ", ")
 }
 
 func displayStatusValue(value string) string {
-	if strings.TrimSpace(value) == "" {
+	if value == "" {
 		return "(none)"
 	}
-	return value
+	return safeDisplay(value)
 }
 
 func displayDirectoryValue(value string) string {
 	if value == "" || value == "." {
 		return "."
 	}
-	return value
+	return safeDisplay(value)
 }

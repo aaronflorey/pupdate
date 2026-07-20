@@ -23,7 +23,28 @@ var currentUserHomeDir = func() (string, error) {
 	return current.HomeDir, nil
 }
 
-func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRunFlag bool) error {
+func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRunFlag bool) (returnErr error) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to resolve working directory: %w", err)
+	}
+	lock, acquired, err := acquireRepositoryLock(workingDir)
+	if err != nil {
+		return err
+	}
+	if !acquired {
+		if cmd != nil && cmd.Name() == "hook" {
+			printStatus(cmd, quietFlag, "pupdate: skip repo (another run is active)")
+			return nil
+		}
+		return fmt.Errorf("another pupdate operation is already active in %s", workingDir)
+	}
+	defer func() {
+		if err := lock.release(); err != nil && returnErr == nil {
+			returnErr = err
+		}
+	}()
+
 	preflight, err := collectPreflight(preflightOptions{})
 	if err != nil {
 		return err
@@ -38,7 +59,7 @@ func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRu
 	}
 
 	for _, warning := range preflight.StateWarnings {
-		printStatus(cmd, options.Quiet, "pupdate: "+warning)
+		printStatus(cmd, options.Quiet, "pupdate: "+safeDisplay(warning))
 	}
 
 	installDisabled := isInstallDisabled()
@@ -49,11 +70,19 @@ func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRu
 		printStatus(cmd, options.Quiet, "pupdate: --dry-run (no installs, no state changes)")
 	}
 
-	outcomes := executeRunResults(cmd, preflight.Results, preflight.DecisionByEcosystem, options, installDisabled)
-	if options.DryRun {
+	outcomes, installErrors := executeRunResults(cmd, preflight.Results, preflight.DecisionByEcosystem, options, installDisabled)
+	if options.DryRun || installDisabled {
 		return nil
 	}
-	return saveRunOutcomes(preflight.Store, preflight.CurrentState, preflight.Results, outcomes)
+	saveErr := saveRunOutcomes(preflight.Store, preflight.CurrentState, preflight.Results, outcomes)
+	if len(installErrors) > 0 {
+		installErr := aggregateInstallErrors(installErrors)
+		if saveErr != nil {
+			return fmt.Errorf("%v; %w", installErr, saveErr)
+		}
+		return installErr
+	}
+	return saveErr
 }
 
 func runSkipStatusLine(reason preflightSkipReason) (string, bool) {
@@ -120,20 +149,24 @@ func executeRunResults(
 	decisionByEcosystem map[string]freshness.EcosystemDecision,
 	options runOptions,
 	installDisabled bool,
-) []ecosystemOutcome {
+) ([]ecosystemOutcome, []error) {
 	outcomes := make([]ecosystemOutcome, 0, len(results))
+	var installErrors []error
 	for _, result := range results {
 		decision, ok := decisionByEcosystem[result.StateKey()]
 		if !ok {
 			continue
 		}
 
-		outcome, ok := executeRunResult(cmd, result, decision, options, installDisabled)
+		outcome, ok, err := executeRunResult(cmd, result, decision, options, installDisabled)
 		if ok {
 			outcomes = append(outcomes, outcome)
 		}
+		if err != nil {
+			installErrors = append(installErrors, err)
+		}
 	}
-	return outcomes
+	return outcomes, installErrors
 }
 
 func executeRunResult(
@@ -142,9 +175,10 @@ func executeRunResult(
 	decision freshness.EcosystemDecision,
 	options runOptions,
 	installDisabled bool,
-) (ecosystemOutcome, bool) {
+) (ecosystemOutcome, bool, error) {
 	target := resultTarget(result)
-	if decision.Decision != freshness.DecisionUpdate {
+	action := effectiveActionFor(result, decision, options.AllowScripts, installDisabled)
+	if action.Kind == effectiveActionUnchanged {
 		printSkipDecision(cmd, options.Quiet, result, decision, target)
 		refreshMetadata := shouldRefreshMetadata(result, decision)
 		return ecosystemOutcome{
@@ -152,26 +186,18 @@ func executeRunResult(
 			RefreshMetadata:  refreshMetadata,
 			Lockfiles:        decision.Lockfiles,
 			LockfileMetadata: decision.LockfileMetadata,
-		}, refreshMetadata
+		}, refreshMetadata, nil
 	}
-	if installDisabled {
-		return ecosystemOutcome{}, false
+	if action.Kind == effectiveActionDisabled {
+		return ecosystemOutcome{}, false, nil
 	}
-
-	plan, ok, reason := selectManagerPlan(result, options.AllowScripts)
-	if !ok {
-		if reason != "" && !options.Quiet {
-			fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s)\n", target, reason)
+	if action.Kind == effectiveActionPolicyBlocked || action.Kind == effectiveActionManagerMissing {
+		if action.Reason != "" && !options.Quiet {
+			fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s)\n", safeDisplay(target), safeDisplay(action.Reason))
 		}
-		return ecosystemOutcome{}, false
+		return ecosystemOutcome{}, false, nil
 	}
-
-	if _, err := lookPath(plan.Manager); err != nil {
-		if !options.Quiet {
-			fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s not found on PATH)\n", target, plan.Manager)
-		}
-		return ecosystemOutcome{}, false
-	}
+	plan := action.Plan
 
 	printStatus(cmd, options.SuppressRoutineStatus, formatRunLine(result, plan))
 	if options.DryRun {
@@ -180,12 +206,10 @@ func executeRunResult(
 			StateKey:  result.StateKey(),
 			Succeeded: false,
 			Lockfiles: decision.Lockfiles,
-		}, false
+		}, false, nil
 	}
 	err := runInstall(cmd, options.Quiet, filepath.Join(".", result.Directory), plan.Manager, plan.Args...)
-	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s install failed: %v\n", plan.Manager, err)
-	} else {
+	if err == nil {
 		printStatus(cmd, options.SuppressRoutineStatus, formatDoneLine(result, plan))
 	}
 
@@ -196,7 +220,22 @@ func executeRunResult(
 		Succeeded:        err == nil,
 		Lockfiles:        lockfiles,
 		LockfileMetadata: lockfileMetadata,
-	}, true
+	}, true, installTargetError(result, plan, err)
+}
+
+func installTargetError(result detection.DetectionResult, plan managerPlan, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s install failed for %s: %w", plan.Manager, resultTarget(result), err)
+}
+
+func aggregateInstallErrors(failures []error) error {
+	parts := make([]string, 0, len(failures))
+	for _, failure := range failures {
+		parts = append(parts, failure.Error())
+	}
+	return fmt.Errorf("dependency installs failed: %s", strings.Join(parts, "; "))
 }
 
 func postInstallLockfileState(
@@ -240,7 +279,7 @@ func printSkipDecision(cmd *cobra.Command, quiet bool, result detection.Detectio
 	}
 
 	if result.Ecosystem == detection.EcosystemGit && strings.HasPrefix(decision.Reason, "git submodule status failed:") {
-		fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s\n", decision.Reason)
+		fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error %s\n", safeDisplay(decision.Reason))
 		return
 	}
 
@@ -248,7 +287,7 @@ func printSkipDecision(cmd *cobra.Command, quiet bool, result detection.Detectio
 	if reason == "" {
 		reason = "up-to-date"
 	}
-	fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s)\n", target, reason)
+	fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: skip %s (%s)\n", safeDisplay(target), safeDisplay(reason))
 }
 
 func printStatus(cmd *cobra.Command, quiet bool, line string) {
@@ -259,25 +298,33 @@ func printStatus(cmd *cobra.Command, quiet bool, line string) {
 }
 
 func formatRunLine(result detection.DetectionResult, plan managerPlan) string {
-	runLine := fmt.Sprintf("pupdate: run %s %s", plan.Manager, strings.Join(plan.Args, " "))
+	args := make([]string, len(plan.Args))
+	for index, arg := range plan.Args {
+		args[index] = safeDisplay(arg)
+	}
+	runLine := fmt.Sprintf("pupdate: run %s %s", safeDisplay(plan.Manager), strings.Join(args, " "))
 	if result.Directory != "" && result.Directory != "." {
-		runLine += fmt.Sprintf(" (in %s)", result.Directory)
+		runLine += fmt.Sprintf(" (in %s)", safeDisplay(result.Directory))
 	}
 	return runLine
 }
 
 func formatDoneLine(result detection.DetectionResult, plan managerPlan) string {
-	doneLine := fmt.Sprintf("pupdate: done %s", plan.Manager)
+	doneLine := fmt.Sprintf("pupdate: done %s", safeDisplay(plan.Manager))
 	if result.Directory != "" && result.Directory != "." {
-		doneLine += fmt.Sprintf(" (in %s)", result.Directory)
+		doneLine += fmt.Sprintf(" (in %s)", safeDisplay(result.Directory))
 	}
 	return doneLine
 }
 
 func formatDryRunLine(result detection.DetectionResult, plan managerPlan) string {
-	line := fmt.Sprintf("pupdate: dry-run %s %s", plan.Manager, strings.Join(plan.Args, " "))
+	args := make([]string, len(plan.Args))
+	for index, arg := range plan.Args {
+		args[index] = safeDisplay(arg)
+	}
+	line := fmt.Sprintf("pupdate: dry-run %s %s", safeDisplay(plan.Manager), strings.Join(args, " "))
 	if result.Directory != "" && result.Directory != "." {
-		line += fmt.Sprintf(" (in %s)", result.Directory)
+		line += fmt.Sprintf(" (in %s)", safeDisplay(result.Directory))
 	}
 	return line
 }

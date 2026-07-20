@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - **Go 1.26** or later (for building from source). The version is declared in `go.mod` and `mise.toml`.
-- A supported package manager for each ecosystem you want pupdate to manage (`bun`, `npm`, `pnpm`, `yarn`, `composer`, `uv`, `poetry`, `pip`, `kst`, `go`, `cargo`, `git`). These must be discoverable on your `PATH`.
+- A supported package manager for each ecosystem you want pupdate to manage (`bun`, `npm`, `pnpm`, Yarn Classic 1.x, `composer`, `uv`, `poetry`, `pip`, `kst`, `go`, `cargo`, `git`). These must be discoverable on your `PATH`.
 - A supported shell: **bash**, **zsh**, or **fish**.
 - Supported operating systems: **Linux** and **macOS**. Other platforms are best-effort.
 
@@ -63,6 +63,20 @@ pupdate: skip go (dependency lockfiles unchanged since last successful run)
 
 The shell hook runs `pupdate` automatically when you `cd` into a project directory.
 
+For persistent setup, preview the resolved target first, then apply:
+
+```bash
+pupdate init install --shell bash
+pupdate init install --shell bash --apply
+```
+
+Replace `bash` with `zsh` or `fish`. pupdate manages one marked block, creates a
+one-time `<target>.pupdate.bak`, preserves permissions, and writes atomically.
+Use `pupdate init uninstall --shell <shell>` to preview removal and add `--apply`
+to remove only the managed block. Backups are never restored automatically.
+
+The `eval` forms below remain available for session-only or manual setup.
+
 ### bash
 
 ```bash
@@ -99,7 +113,7 @@ eval "$(pupdate init --shell bash --mode foreground)"
 
 1. Open a new shell (or re-source your config).
 2. `cd` into a project with a lockfile.
-3. You should see `pupdate:` status lines on stderr, or nothing if the run is a quiet no-op.
+3. Successful hook runs are quiet by default, including successful updates. Run `pupdate run` manually to see decisions; hook failures still print one final error.
 
 To check the current state of detection, freshness, and config:
 
@@ -122,7 +136,7 @@ pupdate creates two local state files in your project directory:
 | File | Purpose |
 |------|---------|
 | `.pupdate` | JSON state file tracking lockfile hashes and last-success timestamps per ecosystem. |
-| `.pupdate.hook.lock` | Lock file for async background hook runs; prevents overlapping runs in the same repo. |
+| `.pupdate.hook.lock` | Persistent advisory-lock coordination file shared by manual runs, hook workers, and resets. Its presence alone does not mean a run is active. |
 
 Add both to your project's `.gitignore`:
 

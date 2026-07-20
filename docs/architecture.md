@@ -13,16 +13,18 @@ cmd/pupdate/          # CLI entry point and all cobra commands
   run_install.go      # Manager plan selection, install execution
   run_state.go        # State outcome application and persistence
   init.go             # `pupdate init` command
+  init_manage.go      # Persistent startup-file preview/apply operations
   init_shell.go       # Shell and mode resolution
   init_snippets.go    # Snippet generation dispatch
   init_snippet_bash.go
   init_snippet_zsh.go
   init_snippet_fish.go
   hook.go             # `pupdate hook` (hidden) — async background hook
-  hook_process_unix.go
-  hook_process_windows.go
+  repository_lock*.go # Cross-command repository coordination
+  install_process*.go # Manager process-group cancellation
   preflight.go        # Pre-run checks: home dir, root_directories, .pupignore
-  config.go           # Config struct, path resolution, validation
+  config.go           # Strict user/project config, validation, merging
+  effective_action.go # Shared run/status action precedence
   config_cmd.go       # `pupdate config` command
   status.go           # `pupdate status` command
   reset.go            # `pupdate reset` command
@@ -48,10 +50,10 @@ internal/
 Contains all cobra commands and the orchestration logic. This package:
 
 - Defines the CLI surface (`run`, `init`, `hook`, `config`, `status`, `reset`).
-- Resolves user configuration.
+- Resolves strict user and traversal-only project configuration.
 - Runs preflight checks (home directory, root_directories, .pupignore).
 - Coordinates detection, freshness evaluation, and install execution.
-- Manages state persistence and background hook locking.
+- Manages state persistence, persistent hook files, and repository locking.
 
 ### `internal/detection`
 
@@ -59,7 +61,7 @@ Detects supported dependency ecosystems from lockfiles and manifests.
 
 - **Entry point:** `DetectWithOptions(dir string, options Options) ([]DetectionResult, error)`
 - **Scanning:** Scans the repository root (`.`), depth-1 subdirectories, and direct children of `packages/`. Optionally scans `workspace_globs` matches.
-- **Signal matching:** Uses `github.com/git-pkgs/manifests` for ecosystem identification, with local fallbacks for Kasetto.
+- **Signal matching:** Builds a registry from embedded manager definitions, with local fallbacks for Kasetto and Git submodules.
 - **Gitignore support:** Reads `.gitignore` and skips matching directories during traversal.
 - **Folder blacklist:** Skips directories whose exact name matches a `folder_blacklist` entry.
 - **Output:** `[]DetectionResult`, each with `Ecosystem`, `Directory`, `Managers`, `MatchedFiles`, and `Warnings`.
@@ -72,7 +74,7 @@ hashes against stored state.
 - **Entry point:** `Evaluate(dir string, detections []detection.DetectionResult, current state.FileState) ([]EcosystemDecision, error)`
 - **Hashing:** SHA-256 of matched lockfiles.
 - **File-identity optimization:** On Linux and macOS, if a file's size, mtime, mode, inode (`file_id`), and ctime (`change_time_unix_nano`) are all unchanged, the stored hash is reused instead of rehashing. On other platforms, files are always rehashed.
-- **Git submodules:** Runs `git submodule status --recursive` (2-second timeout) and checks for drift indicators (`-`, `+`, `U` prefixes).
+- **Git submodules:** Runs `git submodule status --recursive` independently from each detected Git project directory (2-second timeout) and checks for drift indicators (`-`, `+`, `U` prefixes).
 - **PHP vendor check:** For PHP projects with legacy `vendor/.pupdate-checksum` state, checks if the `vendor/` directory exists; if missing, forces an update.
 - **Output:** `[]EcosystemDecision`, each with `Decision` (`update` or `skip`), `Reason`, `Lockfiles`, and `LockfileMetadata`.
 
@@ -90,10 +92,12 @@ Manages the `.pupdate` state file.
 ```
 pupdate run
   │
+  ├─ acquireRepositoryLock()         → nonblocking advisory lock
+  │
   ├─ collectPreflight()
   │    ├─ resolveUserConfigPath()     → config path (PUPDATE_CONFIG or default)
-  │    ├─ readUserConfig()            → raw config
-  │    ├─ resolveUserConfig()         → resolved config (~ expansion, validation)
+  │    ├─ read user + .pupdate.yaml   → strict, single-document YAML
+  │    ├─ resolve/merge config        → user-first traversal union
   │    ├─ collectPreflightSkipReason()
   │    │    ├─ isHomeDirectory()      → skip if $HOME
   │    │    ├─ isOutsideConfiguredRootDirectories()  → skip if outside roots
@@ -106,15 +110,14 @@ pupdate run
   │
   ├─ executeRunResults()
   │    └─ for each detection result:
-  │         ├─ if DecisionSkip → print skip, record metadata refresh
-  │         ├─ if DecisionUpdate:
-  │         │    ├─ selectManagerPlan()  → manager + args
-  │         │    ├─ lookPath(manager)    → check binary on PATH
+  │         ├─ effectiveActionFor()   → unchanged, disabled, policy, PATH, ready
+  │         ├─ if ready:
   │         │    ├─ runInstall()        → execute command (30-min timeout)
   │         │    └─ postInstallLockfileState()  → re-hash after install
   │         └─ record outcome
   │
-  └─ saveRunOutcomes()                → atomic state write (if changed)
+  ├─ saveRunOutcomes()                → save successes before aggregate failure
+  └─ releaseRepositoryLock()
 ```
 
 ## Background hook flow (async mode)
@@ -122,25 +125,23 @@ pupdate run
 ```
 shell cd → hook snippet → pupdate hook --quiet --async
   │
-  ├─ claimBackgroundHookLock()        → create .pupdate.hook.lock (O_EXCL)
-  │    └─ if lock exists and not stale → skip (background run already active)
-  │
   ├─ resolveExecutablePath()          → current binary path
   │
-  ├─ startBackgroundProcess()          → fork: pupdate hook --child --lock-file <path>
-  │
-  └─ writeBackgroundHookLock()         → write PID to lock file
+  └─ startBackgroundProcess()         → fork: pupdate hook --child
 
   (in background child:)
-  pupdate hook --child --lock-file <path>
-    ├─ defer removeBackgroundHookLock()
-    └─ executeRun()                   → same as foreground run
+  pupdate hook --child
+    ├─ acquireRepositoryLock()        → same lock as run/reset
+    ├─ executeRun()                   → full operation while locked
+    └─ release lock; coordination file remains
 ```
 
 ## Design constraints
 
 - **Low-latency `cd` hook:** The async background mode ensures the shell is never blocked. The hook only checks if `PWD` changed and is not `$HOME`.
 - **PATH-based binary resolution:** Manager binaries are resolved via `exec.LookPath` from the current process `PATH`, ensuring compatibility with `nvm`, `asdf`, and `mise`.
-- **Safe defaults:** Lifecycle scripts are disabled by default. Python managers are skipped by default. Frozen/locked install modes are used where supported.
+- **Safe defaults:** Composer plugins and scripts are disabled, other lifecycle scripts are disabled where supported, Python managers require opt-in, Yarn Modern is blocked, and frozen/locked modes are used where supported.
+- **Process trees:** On Linux and macOS, every manager runs in its own process group; timeout or cancellation kills descendants before the repository lock is released.
+- **Persistent coordination:** Manual runs, hook workers, and resets use the same advisory lock. File age and legacy PID contents do not indicate activity.
 - **Atomic state writes:** State is saved via temp file + rename + parent directory fsync to prevent corruption.
 - **No daemon:** pupdate does not run as a background service. The async hook forks a short-lived process per `cd`.

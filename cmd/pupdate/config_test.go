@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -382,5 +383,66 @@ func TestIsTopLevelDirectoryWithinRootRequiresMatchingCase(t *testing.T) {
 
 	if isTopLevelDirectoryWithinRoot(topLevelProject, configuredRoot) {
 		t.Fatalf("expected top-level project not to match configured root with different casing")
+	}
+}
+
+func TestConfigYAMLRejectsUnknownFieldsAndTrailingDocuments(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		project bool
+	}{
+		{name: "unknown user field", content: "allow_script: true\n"},
+		{name: "trailing user document", content: "quiet: true\n---\nquiet: false\n"},
+		{name: "forbidden project policy", content: "allow_scripts: true\n", project: true},
+		{name: "forbidden project roots", content: "root_directories: [~/src]\n", project: true},
+		{name: "trailing project document", content: "workspace_globs: [apps/*]\n---\nfolder_blacklist: [vendor]\n", project: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte(tt.content), 0o600); err != nil {
+				t.Fatalf("write config: %v", err)
+			}
+			var err error
+			if tt.project {
+				_, err = readProjectConfig(path)
+			} else {
+				_, err = readUserConfig(path)
+			}
+			if err == nil {
+				t.Fatal("expected strict YAML error")
+			}
+		})
+	}
+}
+
+func TestLoadPreflightConfigMergesProjectTraversalValuesUserFirst(t *testing.T) {
+	dir := t.TempDir()
+	userPath := filepath.Join(dir, "user.yaml")
+	projectPath := filepath.Join(dir, projectConfigFileName)
+	if err := os.WriteFile(userPath, []byte("workspace_globs: [apps/*, shared/*, apps/*]\nfolder_blacklist: [vendor, node_modules]\nquiet: true\nallow_scripts: true\n"), 0o600); err != nil {
+		t.Fatalf("write user config: %v", err)
+	}
+	if err := os.WriteFile(projectPath, []byte("workspace_globs: [shared/*, packages/*]\nfolder_blacklist: [dist, vendor]\n"), 0o600); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+
+	loaded, err := loadPreflightConfig(userPath, projectPath)
+	if err != nil {
+		t.Fatalf("load preflight config: %v", err)
+	}
+	if !loaded.UserExists || !loaded.ProjectExists {
+		t.Fatalf("expected both config files to exist: %#v", loaded)
+	}
+	if !slices.Equal(loaded.Effective.WorkspaceGlobs, []string{"apps/*", "shared/*", "packages/*"}) {
+		t.Fatalf("unexpected effective workspace globs: %#v", loaded.Effective.WorkspaceGlobs)
+	}
+	if !slices.Equal(loaded.Effective.FolderBlacklist, []string{"vendor", "node_modules", "dist"}) {
+		t.Fatalf("unexpected effective folder blacklist: %#v", loaded.Effective.FolderBlacklist)
+	}
+	if loaded.Effective.Quiet == nil || !*loaded.Effective.Quiet || loaded.Effective.AllowScripts == nil || !*loaded.Effective.AllowScripts {
+		t.Fatalf("expected user-only policy values to remain effective: %#v", loaded.Effective)
 	}
 }

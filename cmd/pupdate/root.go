@@ -45,7 +45,7 @@ func executeCmd(cmd *cobra.Command) int {
 	cmd.SilenceErrors = true
 	cmd.SilenceUsage = true
 	if err := cmd.Execute(); err != nil {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error: %v\n", err)
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "pupdate: error: %s\n", safeDisplay(err.Error()))
 		return 1
 	}
 

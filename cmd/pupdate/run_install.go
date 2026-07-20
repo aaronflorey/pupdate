@@ -25,13 +25,15 @@ var (
 	installTranslatorOnce sync.Once
 	installTranslator     *managers.Translator
 	installTranslatorErr  error
+	installTimeout        = 30 * time.Minute
 )
 
 func runInstall(cmd *cobra.Command, quiet bool, workDir string, name string, args ...string) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
+	ctx, cancel := context.WithTimeout(cmd.Context(), installTimeout)
 	defer cancel()
 
 	command := execCommand(ctx, name, args...)
+	configureInstallCommand(command)
 	command.Dir = workDir
 	if quiet {
 		command.Stdout = io.Discard
@@ -49,12 +51,17 @@ func selectManagerPlan(result detection.DetectionResult, allowScripts bool) (man
 	case detection.EcosystemPHP:
 		extra := []string{"--no-interaction", "--prefer-dist"}
 		if !allowScripts {
-			extra = append(extra, "--no-scripts")
+			extra = append(extra, "--no-plugins", "--no-scripts")
 		}
 		return buildInstallPlan("composer", managers.CommandInput{Extra: extra})
 	case detection.EcosystemNode:
-		if len(result.Managers) != 1 {
+		if len(result.MatchedFiles) != 1 || len(result.Managers) != 1 {
 			return managerPlan{}, false, "multiple Node lockfiles detected; skipping install"
+		}
+		for _, warning := range result.Warnings {
+			if warning.Code == detection.WarningYarnModernUnsupported {
+				return managerPlan{}, false, "Yarn Modern is not supported; only Yarn Classic 1.x can be installed"
+			}
 		}
 		switch result.Managers[0] {
 		case "bun":

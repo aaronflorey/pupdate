@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/aaronflorey/pupdate/internal/detection"
 	"github.com/aaronflorey/pupdate/internal/freshness"
@@ -154,7 +153,7 @@ func TestCLIIntegrationInitPrintsAsyncHookSnippet(t *testing.T) {
 	}
 }
 
-func TestCLIIntegrationHookAsyncCreatesLockAndLaunchesChild(t *testing.T) {
+func TestCLIIntegrationHookAsyncOnlyLaunchesChild(t *testing.T) {
 	dir := t.TempDir()
 	withChdir(t, dir)
 
@@ -192,31 +191,22 @@ func TestCLIIntegrationHookAsyncCreatesLockAndLaunchesChild(t *testing.T) {
 	if startedExecutable != "/fake/bin/pupdate" {
 		t.Fatalf("expected current executable path, got %q", startedExecutable)
 	}
-	if strings.Join(startedArgs, " ") != "hook --quiet --child --lock-file .pupdate.hook.lock" {
+	if strings.Join(startedArgs, " ") != "hook --quiet --child" {
 		t.Fatalf("unexpected detached child args: %#v", startedArgs)
 	}
-
-	lock, _, readErr := readBackgroundHookLock(filepath.Join(dir, backgroundHookLockFileName))
-	if readErr != nil {
-		t.Fatalf("read hook lock: %v", readErr)
-	}
-	if lock.PID != 4242 {
-		t.Fatalf("expected hook lock pid 4242, got %#v", lock)
+	if _, statErr := os.Stat(filepath.Join(dir, backgroundHookLockFileName)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("async parent must not create a lock file, err=%v", statErr)
 	}
 }
 
-func TestCLIIntegrationHookAsyncSkipsWhenActiveLockExists(t *testing.T) {
+func TestCLIIntegrationHookAsyncLaunchesEvenWhenWorkerLockIsActive(t *testing.T) {
 	dir := t.TempDir()
 	withChdir(t, dir)
-
-	lockPath := filepath.Join(dir, backgroundHookLockFileName)
-	if err := os.WriteFile(lockPath, []byte("busy\n"), 0o600); err != nil {
-		t.Fatalf("write lock file: %v", err)
+	lock, acquired, err := acquireRepositoryLock(dir)
+	if err != nil || !acquired {
+		t.Fatalf("acquire worker lock: acquired=%t err=%v", acquired, err)
 	}
-	now := time.Now()
-	if err := os.Chtimes(lockPath, now, now); err != nil {
-		t.Fatalf("touch lock file: %v", err)
-	}
+	t.Cleanup(func() { _ = lock.release() })
 
 	previousStartBackgroundProcess := startBackgroundProcess
 	t.Cleanup(func() {
@@ -229,32 +219,25 @@ func TestCLIIntegrationHookAsyncSkipsWhenActiveLockExists(t *testing.T) {
 		return 0, nil
 	}
 
-	stdout, stderr, err := executeRootCommand(t, "hook", "--async")
+	stdout, stderr, err := executeRootCommand(t, "hook", "--async", "--quiet")
 	if err != nil {
 		t.Fatalf("hook command failed: %v (stderr=%q)", err, stderr)
 	}
-	if stdout != "" {
-		t.Fatalf("expected hook skip to avoid stdout, got %q", stdout)
+	if stdout != "" || stderr != "" {
+		t.Fatalf("expected launcher to remain silent, stdout=%q stderr=%q", stdout, stderr)
 	}
-	if !strings.Contains(stderr, "pupdate: skip repo (background run already active)") {
-		t.Fatalf("expected active-lock skip status, got %q", stderr)
-	}
-	if startCalls != 0 {
-		t.Fatalf("expected active lock to block detached child launch, got %d calls", startCalls)
+	if startCalls != 1 {
+		t.Fatalf("expected parent to launch a child that will arbitrate the lock, got %d calls", startCalls)
 	}
 }
 
-func TestCLIIntegrationHookAsyncReplacesStaleLock(t *testing.T) {
+func TestCLIIntegrationHookAsyncIgnoresLegacyPIDContents(t *testing.T) {
 	dir := t.TempDir()
 	withChdir(t, dir)
 
 	lockPath := filepath.Join(dir, backgroundHookLockFileName)
 	if err := os.WriteFile(lockPath, []byte("old\n"), 0o600); err != nil {
 		t.Fatalf("write lock file: %v", err)
-	}
-	old := time.Now().Add(-backgroundHookStaleAfter - time.Minute)
-	if err := os.Chtimes(lockPath, old, old); err != nil {
-		t.Fatalf("touch stale lock file: %v", err)
 	}
 
 	previousResolveExecutablePath := resolveExecutablePath
@@ -276,19 +259,15 @@ func TestCLIIntegrationHookAsyncReplacesStaleLock(t *testing.T) {
 		t.Fatalf("hook command failed: %v (stderr=%q)", err, stderr)
 	}
 	if stdout != "" || stderr != "" {
-		t.Fatalf("expected stale-lock replacement to avoid command output, stdout=%q stderr=%q", stdout, stderr)
+		t.Fatalf("expected legacy-lock launch to avoid command output, stdout=%q stderr=%q", stdout, stderr)
 	}
-
-	lock, _, readErr := readBackgroundHookLock(lockPath)
-	if readErr != nil {
-		t.Fatalf("read hook lock: %v", readErr)
-	}
-	if lock.PID != 31337 {
-		t.Fatalf("expected stale lock to be replaced with new pid, got %#v", lock)
+	raw, readErr := os.ReadFile(lockPath)
+	if readErr != nil || string(raw) != "old\n" {
+		t.Fatalf("expected legacy contents to remain untouched, raw=%q err=%v", raw, readErr)
 	}
 }
 
-func TestCLIIntegrationHookChildRemovesLockAfterExecution(t *testing.T) {
+func TestCLIIntegrationHookChildLeavesCoordinationFileInPlace(t *testing.T) {
 	dir := t.TempDir()
 	lockPath := filepath.Join(dir, backgroundHookLockFileName)
 	if err := os.WriteFile(lockPath, []byte("busy\n"), 0o600); err != nil {
@@ -319,7 +298,7 @@ func TestCLIIntegrationHookChildRemovesLockAfterExecution(t *testing.T) {
 	if called != 1 {
 		t.Fatalf("expected one child run execution, got %d", called)
 	}
-	if _, statErr := os.Stat(lockPath); !errors.Is(statErr, os.ErrNotExist) {
-		t.Fatalf("expected child hook to remove lock file, err=%v", statErr)
+	if _, statErr := os.Stat(lockPath); statErr != nil {
+		t.Fatalf("expected child hook to leave coordination file in place, err=%v", statErr)
 	}
 }

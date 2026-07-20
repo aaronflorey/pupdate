@@ -32,7 +32,7 @@ pupdate run [flags]
 
 | Variable | Effect |
 |----------|--------|
-| `PUPDATE_SKIP_INSTALL=1` | Disable installs while still running detection and status flow. Accepted values: `1`, `true`, `yes` (case-insensitive). |
+| `PUPDATE_SKIP_INSTALL=1` | Run detection only. No installs or `.pupdate` writes occur. Accepted values: `1`, `true`, `yes` (case-insensitive). |
 | `PUPDATE_CONFIG=/path/to/config.yaml` | Override the config file path for this invocation. |
 
 ### Output format
@@ -44,23 +44,23 @@ Status lines are printed to **stderr** with the `pupdate:` prefix:
 | `pupdate: skip repo ($HOME)` | Skipped because the working directory is `$HOME`. |
 | `pupdate: skip repo (outside configured root_directories)` | Skipped because the working directory is not a direct child of a configured root. |
 | `pupdate: skip repo (.pupignore)` | Skipped because `.pupignore` is present. |
-| `pupdate: skip repo (background run already active)` | Skipped because an async background hook is already running. |
+| `pupdate: skip repo (another run is active)` | A hook worker skipped because another repository operation holds the advisory lock. |
 | `pupdate: installs disabled via PUPDATE_SKIP_INSTALL` | Installs are disabled via the environment variable. |
 | `pupdate: --dry-run (no installs, no state changes)` | Dry-run mode is active. |
 | `pupdate: skip <target> (<reason>)` | A specific ecosystem was detected but its install was skipped. |
 | `pupdate: run <manager> <args> (in <subdir>)` | An install command is starting. `(in <subdir>)` is omitted for the root directory. |
 | `pupdate: done <manager> (in <subdir>)` | An install command completed successfully. |
 | `pupdate: dry-run <manager> <args> (in <subdir>)` | Dry-run preview of the install command. |
-| `pupdate: error <manager> install failed: <err>` | An install command failed. |
+| `pupdate: error: dependency installs failed: ...` | One or more managers failed after independent targets finished and successful state was saved. |
 | `pupdate: error git submodule status failed: <err>` | Git submodule status check failed (surfaced as error, does not crash). |
 
 The `<target>` in skip lines is the ecosystem name for the root directory (e.g. `go`) or `<ecosystem>:<directory>` for subdirectories (e.g. `node:apps/web`).
 
 ### `--quiet` behavior
 
-`--quiet` suppresses skip and no-op lines so hook-driven runs stay silent unless
-an update actually runs. Successful updates still print `run` and `done` lines,
-and failed updates print an `error` line.
+Successful quiet hook workers are fully silent, including successful updates.
+Failures still produce one final error. Manual `run --quiet` continues to show
+its routine `run` and `done` lines while suppressing skip output.
 
 ### Config defaults
 
@@ -124,8 +124,30 @@ The generated hook runs the resolved `pupdate` executable path with
 `hook --quiet` on directory changes. In async mode (default), it adds `--async`
 so the update runs in the background without blocking the shell.
 
-The hook skips launching from `$HOME`. Quiet mode stays silent for no-op runs
-and only prints status when an update actually executes.
+The hook skips launching from `$HOME`. Successful quiet hook workers emit no
+status or manager output; failures emit one final error.
+
+### Persistent startup-file management
+
+```bash
+# Preview, then apply
+pupdate init install --shell bash
+pupdate init install --shell bash --mode foreground --apply
+
+# Preview removal, then apply
+pupdate init uninstall --shell bash
+pupdate init uninstall --shell bash --apply
+```
+
+Both subcommands accept `--target <path>` and preview without writing unless
+`--apply` is present. Install also accepts `--mode async|foreground`. Default
+targets are `~/.bashrc`, `$ZDOTDIR/.zshrc` or `~/.zshrc`, and
+`$XDG_CONFIG_HOME/fish/config.fish` or `~/.config/fish/config.fish`.
+
+Exactly one marked pupdate block is managed. Duplicate, nested, or unmatched
+markers are errors. Existing symlinks are resolved; applied writes are atomic,
+preserve permissions, and create `<target>.pupdate.bak` once without ever
+overwriting or automatically restoring it.
 
 ### Shell-specific behavior
 
@@ -149,7 +171,11 @@ pupdate hook [flags]
 | `--quiet` | bool | `false` | Suppress no-op output and child command output. |
 | `--async` | bool | `false` | Launch the hook work in the background. |
 | `--child` | bool | `false` | Run as the detached background hook worker. |
-| `--lock-file` | string | `""` | Background hook lock file path (required with `--child`). |
+| `--lock-file` | string | `""` | Accepted only for compatibility with older child invocations; contents are ignored. |
+
+The async parent only launches a child. The child acquires the same nonblocking
+repository advisory lock as manual `run` and `reset`. Manual contention exits
+1; hook contention is a successful skip and is silent with `--quiet`.
 
 ## `pupdate config`
 
@@ -175,6 +201,10 @@ pupdate config
 | `folder_blacklist_resolved` | Resolved `folder_blacklist` values. |
 | `quiet` | Configured `quiet` value, or `(not set)`. |
 | `allow_scripts` | Configured `allow_scripts` value, or `(not set)`. |
+| `project_path`, `project_exists` | Root-local `.pupdate.yaml` path and existence. |
+| `project_workspace_globs`, `project_folder_blacklist` | Raw project traversal additions. |
+| `project_*_resolved` | Normalized project traversal additions. |
+| `effective_workspace_globs`, `effective_folder_blacklist` | Stable user-first merged traversal values. |
 
 ## `pupdate reset`
 
@@ -204,15 +234,19 @@ pupdate status
 ### Output includes
 
 - Overall `run_status` and `run_reason` for the current directory.
-- Config path, existence, and resolved `root_directories`.
+- User and project config paths, existence, raw/resolved traversal values, and effective merged values.
 - Configured and effective `quiet` / `allow_scripts` run defaults.
 - Background hook lock path and whether a detached hook run is currently active.
 - `.pupdate` path, existence, and any state decode warnings.
-- One section per detected target with matched files, freshness result, install readiness, and resolved manager path.
+- One section per detected target with matched files, freshness result, `last_success_at`, install readiness, and resolved manager path.
+- `run_status: disabled` and per-target `install_status: disabled` when `PUPDATE_SKIP_INSTALL` is active.
 
 ## Exit codes
 
 | Code | Meaning |
 |------|---------|
 | `0` | Command completed successfully (including skips and no-ops). |
-| `1` | Command failed with an error. The error is printed to stderr as `pupdate: error: <err>`. |
+| `1` | Command failed, a manual operation contended on the lock, or one or more managers failed. The error is printed once as `pupdate: error: <err>`. |
+
+Repository-derived strings containing control characters, DEL, or terminal
+escapes are rendered using quoted ASCII escapes in all command output.

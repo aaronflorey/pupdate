@@ -40,11 +40,11 @@ safe by default, and easy to follow from concise stderr status output.
 
 | Ecosystem | Detected By | Manager | Default Behavior |
 |-----------|-------------|---------|------------------|
-| Node | `bun.lock` | `bun` | `bun install --frozen-lockfile --ignore-scripts` |
-| Node | `package-lock.json` | `npm` | `npm ci --ignore-scripts` |
+| Node | `bun.lock`, `bun.lockb` | `bun` | `bun install --frozen-lockfile --ignore-scripts` |
+| Node | `package-lock.json`, `npm-shrinkwrap.json` | `npm` | `npm ci --ignore-scripts` |
 | Node | `pnpm-lock.yaml` | `pnpm` | `pnpm install --frozen-lockfile --ignore-scripts` |
-| Node | `yarn.lock` | `yarn` | `yarn install --frozen-lockfile --ignore-scripts` |
-| PHP | `composer.lock` | `composer` | `composer install --no-interaction --prefer-dist --no-scripts` |
+| Node | `yarn.lock` | Yarn Classic 1.x | `yarn install --frozen-lockfile --ignore-scripts`; Yarn Modern is detected but blocked |
+| PHP | `composer.lock` | `composer` | `composer install --no-interaction --prefer-dist --no-plugins --no-scripts` |
 | Python | `uv.lock` | `uv` | skipped by default; `--allow-scripts` opts into `uv sync --frozen` |
 | Python | `poetry.lock` | `poetry` | skipped by default; `--allow-scripts` opts into `poetry install --no-interaction --sync` |
 | Python | `requirements.txt` | `pip` | skipped by default; `--allow-scripts` opts into `pip install -r requirements.txt --disable-pip-version-check --no-input` |
@@ -62,4 +62,5 @@ Manager binaries are resolved from the current process `PATH`, which keeps
 - **File-identity optimization:** The shortcut that skips rehashing unchanged lockfiles is only implemented on Linux and macOS (`internal/freshness/file_identity_linux.go`, `internal/freshness/file_identity_darwin.go`). On other platforms, freshness checks may rehash unchanged lockfiles more often.
 - **Python safety:** Python managers (`uv`, `poetry`, `pip`) are skipped by default because they can execute install/build code. You must explicitly pass `--allow-scripts` to opt in.
 - **Node multiple lockfiles:** If more than one Node lockfile is detected in the same directory, the install is skipped with a warning.
+- **Yarn Modern:** A `.yarnrc.yml` or non-1.x `packageManager: yarn@…` declaration is reported but blocked. Only Yarn Classic 1.x is supported.
 - **Kasetto lock-only:** Kasetto installs only run when a local `kasetto.yaml` or `kasetto.yml` is detected. Lock-only detections are skipped.

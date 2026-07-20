@@ -32,12 +32,12 @@ status messages documented here come from the source code in `cmd/pupdate/`.
    - Message: `pupdate: skip repo (.pupignore)`
    - Fix: Remove the `.pupignore` file if you want pupdate to run in this repo.
 
-4. **The hook is in async mode and the run is a quiet no-op.** Async hooks use `--quiet` by default, so no-op runs produce no output. This is expected behavior.
+4. **The hook completed successfully.** Async hooks use `--quiet` by default, so all successful hook work, including installs, produces no output. This is expected behavior.
    - Fix: Run `pupdate run` manually (without `--quiet`) to see full status, or check `pupdate status`.
 
 5. **A background hook is already running.**
-   - Message: `pupdate: skip repo (background run already active)`
-   - Fix: Wait for the existing run to finish, or remove `.pupdate.hook.lock` if it is stale.
+   - Message from a non-quiet worker: `pupdate: skip repo (another run is active)`
+   - Fix: Wait for the existing manual run, hook worker, or reset to finish. The coordination file remains present when idle; do not delete it based on age or contents.
 
 ### `pupdate: skip <target> (<reason>)`
 
@@ -49,14 +49,17 @@ This means a specific ecosystem was detected but its install was skipped. Common
 | `dependency lockfiles changed since last successful run` | Lockfiles changed but the decision was still skip. | Should not normally appear with this reason; check `pupdate status`. |
 | `missing prior lockfile hash` | No prior state exists for this ecosystem. | This is expected on first run — the install should execute. |
 | `multiple Node lockfiles detected; skipping install` | More than one Node lockfile in the same directory. | Remove the extra lockfile(s) so only one package manager is active. |
+| `Yarn Modern is not supported; only Yarn Classic 1.x can be installed` | `.yarnrc.yml` exists or `packageManager` declares non-1.x Yarn. | Use Yarn Classic 1.x or manage the project outside pupdate. |
 | `multiple Python lockfiles detected; skipping install` | More than one Python lockfile in the same directory. | Remove the extra lockfile(s). |
 | `python manager <name> can execute install/build code; rerun with --allow-scripts to allow` | Python managers are skipped by default for safety. | Pass `--allow-scripts` if you trust the project. |
 | `Kasetto project has no local kasetto.yaml or kasetto.yml; skipping install` | Only `kasetto.lock` was found without a config file. | Add a `kasetto.yaml` or `kasetto.yml` to the project. |
 | `<manager> not found on PATH` | The package manager binary is not installed or not on `PATH`. | Install the manager or ensure it is on `PATH` (e.g., activate `nvm`, `asdf`, `mise`). |
 
-### `pupdate: error <manager> install failed: <err>`
+### `pupdate: error: dependency installs failed: ...`
 
-**Cause:** The package manager command exited with a non-zero status.
+**Cause:** One or more package manager commands exited nonzero. pupdate continues
+independent targets, saves successful state, then exits nonzero with one stable
+aggregate error.
 
 **Diagnosis:**
 
@@ -75,7 +78,7 @@ This means a specific ecosystem was detected but its install was skipped. Common
 **Common fixes:**
 
 - **Node `npm ci` fails:** Ensure `package-lock.json` is in sync with `package.json`. Run `npm install` manually to regenerate the lockfile.
-- **Composer fails:** Ensure `composer.lock` is valid. Run `composer install` manually.
+- **Composer fails:** Ensure `composer.lock` is valid. Remember that pupdate defaults to `--no-plugins --no-scripts`; `--allow-scripts` enables both.
 - **Go `go mod download` fails:** Ensure `go.mod` is valid and the module cache is accessible. Run `go mod tidy` manually.
 - **Cargo `cargo fetch --locked` fails:** Ensure `Cargo.lock` is in sync. Run `cargo fetch` manually.
 
@@ -110,9 +113,12 @@ This means a specific ecosystem was detected but its install was skipped. Common
 
 #### `failed to parse <path>: <err>`
 
-**Cause:** The config file contains invalid YAML.
+**Cause:** The config file contains invalid YAML, an unknown key, or an additional YAML document.
 
 **Fix:** Validate your YAML syntax. Common issues include incorrect indentation, unquoted strings with special characters, or tabs instead of spaces.
+
+For `.pupdate.yaml`, only `workspace_globs` and `folder_blacklist` are allowed.
+Move `root_directories`, `quiet`, and `allow_scripts` to user config.
 
 #### `failed to resolve root_directories[N]: <err>`
 
@@ -138,17 +144,23 @@ This means a specific ecosystem was detected but its install was skipped. Common
 
 **Fix:** This is expected behavior on unsupported platforms. Use Linux or macOS for the optimized path.
 
-### Background hook lock is stuck
+### A repository operation reports lock contention
 
-**Symptom:** `pupdate: skip repo (background run already active)` persists.
+**Symptom:** Manual `run` or `reset` exits with `another pupdate operation is already active`, or a hook skips.
 
-**Cause:** The `.pupdate.hook.lock` file was not cleaned up (e.g., the background process was killed).
+**Cause:** Another process currently holds the OS advisory lock on `.pupdate.hook.lock`.
 
-**Fix:** The lock is automatically considered stale after 10 minutes, or when the PID is no longer running. To force cleanup immediately:
+**Fix:** Wait for that operation or terminate the owning process deliberately.
+The file is persistent and unlocked legacy PID contents are treated as idle;
+removing it is neither necessary nor a reliable way to bypass an active lock.
 
-```bash
-rm .pupdate.hook.lock
-```
+### Persistent hook install reports invalid markers
+
+**Cause:** The startup file contains duplicate, nested, or unmatched pupdate markers.
+
+**Fix:** Repair the marker pair manually, then rerun `pupdate init install` or
+`uninstall` without `--apply` to preview the next operation. The one-time
+`<target>.pupdate.bak` is recovery material and is never restored automatically.
 
 ## Escalation
 

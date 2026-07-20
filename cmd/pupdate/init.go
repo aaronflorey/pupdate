@@ -42,5 +42,7 @@ eval "$(pupdate init --shell bash --mode foreground)"`,
 
 	cmd.Flags().StringVar(&shell, "shell", "", "shell to configure (bash, zsh, or fish)")
 	cmd.Flags().StringVar(&mode, "mode", hookModeAsync, "hook execution mode (async default, or foreground)")
+	cmd.AddCommand(newInitInstallCmd())
+	cmd.AddCommand(newInitUninstallCmd())
 	return cmd
 }

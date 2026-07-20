@@ -10,7 +10,13 @@ behavior.
 |----------|--------|-------------|
 | 1 (highest) | `PUPDATE_CONFIG` env var | Override the config file path for a single invocation. |
 | 2 | `~/.config/pupdate/config.yaml` | Default user config file. |
+| traversal union | `.pupdate.yaml` | Repository-local additions to `workspace_globs` and `folder_blacklist`. |
 | 3 (lowest) | Implicit defaults | Used when no config file exists or a key is absent. |
+
+User configuration exclusively owns `root_directories`, `quiet`, and
+`allow_scripts`. Project traversal values are normalized, appended after user
+values, and deduplicated in stable order. Blacklists are unioned, so project
+configuration cannot remove a user exclusion.
 
 ### Config path resolution
 
@@ -24,9 +30,23 @@ The config path is resolved in `cmd/pupdate/config.go` (`resolveUserConfigPath`)
 
 When the config file is missing, `pupdate run` and `pupdate config` use implicit defaults without creating the config directory or writing `config.yaml`.
 
+The root-local `.pupdate.yaml` is loaded automatically and accepts only:
+
+```yaml
+workspace_globs:
+  - packages/*
+folder_blacklist:
+  - dist
+```
+
+Committed workspace globs are an explicit traversal opt-in and can broaden
+which nested projects pupdate manages. Policy keys such as `allow_scripts`,
+`quiet`, and `root_directories` are rejected in project config.
+
 ## Config file format
 
-The config file is YAML. The struct is defined in `cmd/pupdate/config.go` (`userConfig`):
+Configuration is strict, single-document YAML. Unknown keys and trailing YAML
+documents fail before detection. The user config shape is:
 
 ```yaml
 # Restrict runs to top-level project directories under these roots.
@@ -137,7 +157,7 @@ PUPDATE_CONFIG=/path/to/config.yaml pupdate run
 ### `PUPDATE_SKIP_INSTALL`
 
 - **Purpose:** Disable installs while still running detection and status flow.
-- **Accepted values:** `1`, `true`, `yes` (case-insensitive). Any other value is treated as disabled.
+- **Accepted values:** `1`, `true`, `yes` (case-insensitive). Other values do not disable installs.
 - **Behavior:** When active, pupdate detects ecosystems and prints status but does not execute any install commands or save state.
 - **Output:** `pupdate: installs disabled via PUPDATE_SKIP_INSTALL`
 - **Consumed in:** `cmd/pupdate/run_execution.go` (`isInstallDisabled`).
@@ -190,10 +210,10 @@ PUPDATE_SKIP_INSTALL=1 pupdate run
 ## Background hook lock: `.pupdate.hook.lock`
 
 - **Location:** `.pupdate.hook.lock` in the current working directory.
-- **Format:** Plain text. First line is the claimed-at Unix timestamp. Optional second line is `pid=<pid>`.
-- **Purpose:** Prevents overlapping async background hook runs in the same repository.
-- **Stale after:** 10 minutes (`backgroundHookStaleAfter` in `cmd/pupdate/hook.go`).
-- **Stale detection:** If the lock file's PID is no longer running, or the lock is older than 10 minutes, or the file is empty, it is considered stale and removed.
+- **Format:** Persistent coordination file. Legacy PID or timestamp contents are ignored.
+- **Purpose:** Serializes manual runs, hook workers, and resets in the same repository.
+- **Activity:** On Linux and macOS, activity is determined by a nonblocking OS advisory lock held for the complete mutating operation. The file remains after release.
+- **Contention:** Manual `run` and `reset` return exit 1. Hook workers skip successfully; quiet hooks remain silent.
 
 ## Validation and failure modes
 
@@ -201,6 +221,8 @@ PUPDATE_SKIP_INSTALL=1 pupdate run
 |----------|----------|
 | Config file missing | Uses implicit defaults; no error. |
 | Config file has invalid YAML | Error: `failed to parse <path>: <err>`. |
+| Config file has an unknown key or extra YAML document | Parse error before detection. |
+| Project config contains a policy key | Parse error; only traversal keys are accepted. |
 | `root_directories` entry has invalid path | Error: `failed to resolve root_directories[N]: <err>`. |
 | `workspace_globs` entry is absolute | Error: `workspace glob must be relative`. |
 | `workspace_globs` entry matches root | Error: `workspace glob must not match the repository root`. |
@@ -230,6 +252,14 @@ folder_blacklist: vendor
 folder_blacklist_resolved: vendor
 quiet: (not set)
 allow_scripts: (not set)
+project_path: /project/.pupdate.yaml
+project_exists: true
+project_workspace_globs: packages/*
+project_workspace_globs_resolved: packages/*
+project_folder_blacklist: dist
+project_folder_blacklist_resolved: dist
+effective_workspace_globs: apps/*, services/*, packages/*
+effective_folder_blacklist: vendor, dist
 ```
 
 For `workspace_globs` and `folder_blacklist`, the `_resolved` values are the

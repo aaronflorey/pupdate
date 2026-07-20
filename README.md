@@ -13,10 +13,10 @@ when dependency files have not changed.
 It is built for shell-hook usage on `cd`, so the common path stays low-latency,
 safe by default, and easy to follow from concise stderr status output.
 
-Detection is backed by `github.com/git-pkgs/manifests` plus small local
-fallbacks for unsupported ecosystems, and install command construction is backed
-by `github.com/git-pkgs/managers` with the same approach. `pupdate` preserves
-its existing traversal limits, local state flow, and safe default behavior.
+Detection uses a definition-backed signal registry with small local fallbacks
+for Kasetto and Git submodules. Install command construction is backed by
+`github.com/git-pkgs/managers`. `pupdate` preserves bounded traversal, local
+state, and safe default behavior.
 
 ## Install
 
@@ -84,6 +84,15 @@ Use explicit foreground mode when you want synchronous hook execution:
 eval "$(pupdate init --shell bash --mode foreground)"
 ```
 
+Preview and persist the hook in your shell startup file:
+
+```bash
+pupdate init install --shell bash
+pupdate init install --shell bash --apply
+```
+
+Use `pupdate init uninstall --shell bash` to preview removal, then add `--apply`.
+
 Escaped form for docs or templates that need literal shell interpolation text:
 
 ```bash
@@ -98,8 +107,10 @@ routine status and child-command output while still reporting install errors,
 so asynchronous updates do not overwrite the live shell prompt.
 
 By default, `pupdate init` generates hooks that run `hook --quiet --async`
-in the background using the current executable path. Overlapping background runs
-in the same repo are skipped while a recent `.pupdate.hook.lock` exists.
+in the background using the current executable path. The detached worker,
+manual runs, and resets use the same nonblocking repository advisory lock.
+`.pupdate.hook.lock` remains in place; lock ownership, not file contents or age,
+determines whether work is active.
 
 Both `.pupdate` and `.pupdate.hook.lock` are generated local-machine state files.
 Add them to your application repository's ignore file and do not commit them.
@@ -118,11 +129,11 @@ Add them to your application repository's ignore file and do not commit them.
 
 | Ecosystem | Detected By | Manager | Default Behavior |
 |-----------|-------------|---------|------------------|
-| Node | `bun.lock` | `bun` | `bun install --frozen-lockfile --ignore-scripts` |
-| Node | `package-lock.json` | `npm` | `npm ci --ignore-scripts` |
+| Node | `bun.lock`, `bun.lockb` | `bun` | `bun install --frozen-lockfile --ignore-scripts` |
+| Node | `package-lock.json`, `npm-shrinkwrap.json` | `npm` | `npm ci --ignore-scripts` |
 | Node | `pnpm-lock.yaml` | `pnpm` | `pnpm install --frozen-lockfile --ignore-scripts` |
-| Node | `yarn.lock` | `yarn` | `yarn install --frozen-lockfile --ignore-scripts` |
-| PHP | `composer.lock` | `composer` | `composer install --no-interaction --prefer-dist --no-scripts` |
+| Node | `yarn.lock` | Yarn Classic 1.x | `yarn install --frozen-lockfile --ignore-scripts`; Yarn Modern is detected but blocked |
+| PHP | `composer.lock` | `composer` | `composer install --no-interaction --prefer-dist --no-plugins --no-scripts` |
 | Python | `uv.lock` | `uv` | skipped by default; `--allow-scripts` opts into `uv sync --frozen` |
 | Python | `poetry.lock` | `poetry` | skipped by default; `--allow-scripts` opts into `poetry install --no-interaction --sync` |
 | Python | `requirements.txt` | `pip` | skipped by default; `--allow-scripts` opts into `pip install -r requirements.txt --disable-pip-version-check --no-input` |
@@ -153,7 +164,7 @@ Flags:
 
 Environment:
 
-- `PUPDATE_SKIP_INSTALL=1`: disable installs while still running detection and status flow
+- `PUPDATE_SKIP_INSTALL=1`: run detection only; installs and all `.pupdate` writes are disabled
 
 User config:
 
@@ -165,6 +176,13 @@ User config:
 - `quiet: true|false`: set the default `run` quiet mode without needing `--quiet` in shell aliases or wrappers
 - `allow_scripts: true|false`: set the default lifecycle-script policy for `run`; explicit command flags still win
 - when missing, `pupdate run` and `pupdate config` use implicit defaults (`root_directories: []`, `workspace_globs: []`, `folder_blacklist: []`) without creating the config directory or writing `config.yaml`
+
+A repository-local `.pupdate.yaml` is loaded automatically. It accepts only
+`workspace_globs` and `folder_blacklist`. Normalized project values are appended
+to user values with stable deduplication; blacklists are unioned, so a committed
+project config cannot remove a user exclusion. Project workspace globs can
+explicitly broaden traversal. Root restrictions, quiet mode, and script policy
+remain user-only. Unknown keys and additional YAML documents are errors.
 
 `workspace_globs` is optional and does not change the default traversal unless you
 set it. Without any configured globs, `pupdate` still scans only the repository
@@ -215,6 +233,14 @@ Flags:
 - `--shell <bash|zsh|fish>`: choose the shell explicitly
 - `--mode <foreground|async>`: choose synchronous foreground execution, or use the default async background hook that detaches update execution from the shell transition
 
+`pupdate init install` and `pupdate init uninstall` manage one marked block in a
+startup file. Both preview by default and require `--apply` to write. Default
+targets are `~/.bashrc`, `$ZDOTDIR/.zshrc` (or `~/.zshrc`), and
+`$XDG_CONFIG_HOME/fish/config.fish` (or `~/.config/fish/config.fish`). Existing
+symlinks are resolved before editing. The first applied change saves the
+original as `<target>.pupdate.bak`; that backup is never overwritten or restored
+automatically. Writes are atomic and preserve existing permissions.
+
 ### `pupdate config`
 
 Prints the resolved user config path and active config values. If the config file
@@ -229,6 +255,7 @@ Output includes:
 - the configured and resolved `workspace_globs` values
 - the configured and resolved `folder_blacklist` values
 - the configured `quiet` and `allow_scripts` values when set
+- project config path, existence, traversal values, and effective merged values
 
 ### `pupdate reset`
 
@@ -248,7 +275,8 @@ Output includes:
 - configured and effective `quiet` / `allow_scripts` run defaults
 - background hook lock path and whether a detached hook run is currently active
 - `.pupdate` path, existence, and any state decode warnings
-- one section per detected target with matched files, freshness result, install readiness, and resolved manager path
+- project and effective traversal configuration
+- one section per detected target with matched files, freshness result, `last_success_at`, install readiness, and resolved manager path
 
 ## How It Works
 
@@ -265,7 +293,9 @@ Output includes:
 5. If inputs changed, or if no successful state exists yet, it runs the manager's
    safe default command. Managers without a verified safe mode (currently the
    Python managers) are skipped unless you explicitly allow scripts.
-6. On success, it updates `.pupdate` with the latest lockfile hashes and timestamp.
+6. Independent targets continue after a manager failure. Successful results are
+   saved first, then manual `pupdate run` returns a stable aggregate error and a
+   nonzero exit status if any manager failed.
 
 For git submodules, `pupdate` also checks `git submodule status --recursive` so it
 can react to submodule drift even when `.gitmodules` itself has not changed.
@@ -285,11 +315,11 @@ Manual runs use stable, concise stderr prefixes:
 - `pupdate: skip <target> (<reason>)`
 - `pupdate: run <manager> <args> (in <subdir>)`
 - `pupdate: done <manager> (in <subdir>)`
-- `pupdate: error <manager> install failed: <err>`
+- `pupdate: error: dependency installs failed: <manager> install failed for <target>: <err>`
 
-`--quiet` suppresses skip and no-op lines so hook-driven runs stay silent unless
-an update actually runs. Successful updates still print `run` and `done` lines,
-and failed updates print an `error` line.
+Successful `--quiet` hook runs are fully silent, including successful updates.
+Failures still produce one final error. Repository-derived control characters
+are rendered with quoted ASCII escapes so output cannot forge terminal lines.
 
 These messages are meant to stay readable in interactive shells and easy to grep
 from shell history or logs.
@@ -297,13 +327,13 @@ from shell history or logs.
 ## Safety Model
 
 - Safe and frozen install modes are used by default where supported.
-- Lifecycle scripts are disabled by default where supported.
+- Composer plugins and scripts are disabled by default; other lifecycle scripts are disabled where supported.
 - Python managers are skipped by default and only run when you explicitly pass `--allow-scripts`.
 - `--allow-scripts` is required to opt into lifecycle scripts and Python installs that can execute install/build code.
 - `.pupignore` short-circuits the full run for a repository before detection and state checks.
 - `root_directories` can restrict runs to top-level project directories under specific roots.
 - Hook-driven runs default to non-blocking async execution and avoid launching from `$HOME`.
-- Async hook mode skips overlapping background runs per repo using `.pupdate.hook.lock`.
+- Manual runs, hook workers, and resets are serialized with a repository advisory lock held through process-tree termination and state persistence.
 - Git submodule status failures are surfaced as stderr errors without crashing the command.
 
 ## Development

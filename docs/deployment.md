@@ -29,7 +29,7 @@ to `main`.
 
 | Job | Matrix | Steps |
 |-----|--------|-------|
-| `test` | `ubuntu-latest`, `macos-latest` | `go vet ./...`, `go test ./... -count=1`, hot-path benchmarks. |
+| `test` | `ubuntu-latest`, `macos-latest` | Check `gofmt -l` and `go mod tidy -diff`, then run `go vet ./...`, `go test ./... -count=1`, and hot-path benchmarks. |
 
 CI uses `actions/setup-go@v6` with `go-version-file: go.mod` for Go version
 management.

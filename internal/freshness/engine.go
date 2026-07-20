@@ -97,7 +97,11 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 		}
 
 		if result.Ecosystem == detection.EcosystemGit {
-			lines, err := gitSubmoduleStatusFn(dir)
+			gitDirectory := dir
+			if result.Directory != "" && result.Directory != "." {
+				gitDirectory = filepath.Join(dir, result.Directory)
+			}
+			lines, err := gitSubmoduleStatusFn(gitDirectory)
 			if err != nil {
 				decision.Decision = DecisionSkip
 				decision.Reason = fmt.Sprintf("git submodule status failed: %v", err)

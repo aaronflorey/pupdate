@@ -49,6 +49,13 @@ mise exec -- go test ./cmd/pupdate -count=1
 mise exec -- go vet ./...
 ```
 
+### Module graph and race tests
+
+```bash
+mise exec -- go mod tidy -diff
+mise exec -- go test -race ./... -count=1
+```
+
 ### Format
 
 ```bash
@@ -62,6 +69,9 @@ The CI runs hot-path benchmarks for detection and freshness:
 ```bash
 mise exec -- go test ./internal/detection ./internal/freshness -run '^$' -bench 'Benchmark(DetectProjectTree|HashMatchedFiles)$' -count=1
 ```
+
+CI order is check-only formatting, module-graph cleanliness, vet, the uncached
+full suite, then the hot-path benchmarks on both Linux and macOS.
 
 ## Repository layout
 
@@ -98,7 +108,7 @@ From `CONTRIBUTING.md`:
 Tests are colocated with source files (`*_test.go`). The test suite covers:
 
 - **Command behavior:** `cmd/pupdate/*_test.go` — CLI commands, flags, output.
-- **Detection:** `internal/detection/detector_test.go` — ecosystem detection, scanning, blacklisting.
+- **Detection:** `internal/detection/detector_test.go` — definition-backed signals, ecosystem policy diagnostics, scanning, blacklisting.
 - **Freshness:** `internal/freshness/engine_test.go` — hash comparison, git submodule drift, file identity.
 - **State:** `internal/state/model_test.go`, `internal/state/store_test.go` — encode/decode, atomic save.
 - **Benchmarks:** `internal/detection/detector_benchmark_test.go`, `internal/freshness/engine_benchmark_test.go`, `internal/freshness/performance_guardrail_test.go`.
@@ -109,6 +119,8 @@ Tests are colocated with source files (`*_test.go`). The test suite covers:
 - Use table-driven tests for command/flag combinations.
 - Use `t.TempDir()` for filesystem isolation.
 - The `cmd/pupdate/test_env_test.go` file provides shared test helpers.
+- Locking tests must use the repository advisory-lock helpers rather than PID or file-age assumptions.
+- Startup-file tests must use temporary targets and must never touch the developer's real shell configuration.
 
 ## Pull requests
 
@@ -125,7 +137,6 @@ From `CONTRIBUTING.md`:
 |------------|---------|
 | `github.com/spf13/cobra` | CLI command framework. |
 | `gopkg.in/yaml.v3` | Config file parsing. |
-| `github.com/git-pkgs/manifests` | Ecosystem identification from lockfile/manifest names. |
 | `github.com/git-pkgs/managers` | Install command construction for package managers. |
 | `github.com/git-pkgs/gitignore` | `.gitignore` pattern matching during directory traversal. |
 

@@ -95,6 +95,9 @@ func TestRunManualModeUsesHumanReadableStatusWithoutStdout(t *testing.T) {
 	if !strings.Contains(stderr.String(), "pupdate: installs disabled via PUPDATE_SKIP_INSTALL") {
 		t.Fatalf("expected manual run status output, got %q", stderr.String())
 	}
+	if _, err := os.Stat(filepath.Join(dir, state.FileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("install disablement must not create state, err=%v", err)
+	}
 }
 
 func TestRunDoesNotCreateUserConfigWhenMissing(t *testing.T) {
@@ -126,6 +129,7 @@ func TestRunDoesNotCreateUserConfigWhenMissing(t *testing.T) {
 
 func TestRunReturnsDetectionFailedPrefixOnDetectorError(t *testing.T) {
 	disableInstall(t)
+	withChdir(t, t.TempDir())
 	t.Cleanup(func() {
 		detectFn = detection.DetectWithOptions
 	})
@@ -1076,7 +1080,7 @@ func TestRunUpdatesPackagesChildAndSavesPackagesNamespacedState(t *testing.T) {
 	}
 }
 
-func TestRunPrunesUndetectedSubdirectoryStateWithoutChangingActiveTargets(t *testing.T) {
+func TestRunInstallDisabledDoesNotPruneOrChangeState(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "bun.lock")
 	withChdir(t, dir)
@@ -1114,8 +1118,8 @@ func TestRunPrunesUndetectedSubdirectoryStateWithoutChangingActiveTargets(t *tes
 	if len(warnings) != 0 {
 		t.Fatalf("unexpected state warnings: %v", warnings)
 	}
-	if _, ok := stored.Ecosystems["node@frontend"]; ok {
-		t.Fatalf("expected stale subdirectory state to be pruned, got %#v", stored.Ecosystems)
+	if _, ok := stored.Ecosystems["node@frontend"]; !ok {
+		t.Fatalf("install disablement must not prune state, got %#v", stored.Ecosystems)
 	}
 	if stored.Ecosystems["node"].LastSuccessAt != initial.Ecosystems["node"].LastSuccessAt {
 		t.Fatalf("expected active root ecosystem timestamp to remain unchanged, got %#v", stored.Ecosystems["node"])
@@ -1125,7 +1129,7 @@ func TestRunPrunesUndetectedSubdirectoryStateWithoutChangingActiveTargets(t *tes
 	}
 }
 
-func TestRunPrintsErrorStatusWhenInstallFails(t *testing.T) {
+func TestRunReturnsInstallFailureOnce(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "bun.lock")
 	withChdir(t, dir)
@@ -1145,22 +1149,61 @@ func TestRunPrintsErrorStatusWhenInstallFails(t *testing.T) {
 	cmd := newRunCmd()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&stderr)
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("run command failed: %v", err)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "dependency installs failed: bun install failed for node") {
+		t.Fatalf("expected aggregate install failure, got %v", err)
 	}
 
 	if !strings.Contains(stderr.String(), "pupdate: run bun install --frozen-lockfile --ignore-scripts") {
 		t.Fatalf("expected run status line before install, got %q", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "pupdate: error bun install failed:") {
-		t.Fatalf("expected install failure error status line, got %q", stderr.String())
+	if strings.Count(stderr.String(), "install failed") != 1 {
+		t.Fatalf("install failure should be rendered exactly once, got %q", stderr.String())
+	}
+}
+
+func TestRunPersistsSuccessfulTargetsBeforeReturningAggregateFailure(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "bun.lock", "go.mod")
+	withChdir(t, dir)
+	t.Cleanup(func() {
+		execCommand = exec.CommandContext
+		lookPath = exec.LookPath
+	})
+	lookPath = func(file string) (string, error) { return file, nil }
+	execCommand = func(ctx context.Context, name string, _ ...string) *exec.Cmd {
+		if name == "bun" {
+			return exec.CommandContext(ctx, "false")
+		}
+		return exec.CommandContext(ctx, "true")
+	}
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"run"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "bun install failed for node") {
+		t.Fatalf("expected bun failure, got %v", err)
+	}
+
+	stored, warnings, err := state.NewStore(dir).Load()
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("load state after mixed run: warnings=%v err=%v", warnings, err)
+	}
+	if _, ok := stored.Ecosystems["node"]; ok {
+		t.Fatalf("failed target must not be persisted: %#v", stored.Ecosystems)
+	}
+	if stored.Ecosystems["go"].LastSuccessAt == "" {
+		t.Fatalf("successful independent target must be persisted: %#v", stored.Ecosystems)
 	}
 }
 
 func TestSelectManagerPlanBunUsesSafeFlags(t *testing.T) {
 	plan, ok, reason := selectManagerPlan(detection.DetectionResult{
-		Ecosystem: detection.EcosystemNode,
-		Managers:  []string{"bun"},
+		Ecosystem:    detection.EcosystemNode,
+		Managers:     []string{"bun"},
+		MatchedFiles: []string{"bun.lock"},
 	}, false)
 
 	if !ok {
@@ -1171,6 +1214,19 @@ func TestSelectManagerPlanBunUsesSafeFlags(t *testing.T) {
 	}
 	if !slices.Equal(plan.Args, []string{"install", "--frozen-lockfile", "--ignore-scripts"}) {
 		t.Fatalf("unexpected bun args: %#v", plan.Args)
+	}
+}
+
+func TestFormatRunLineQuotesControlCharacters(t *testing.T) {
+	line := formatRunLine(detection.DetectionResult{Directory: "packages/evil\nname"}, managerPlan{
+		Manager: "npm",
+		Args:    []string{"ci", "--config=bad\x1b[2J"},
+	})
+	if strings.Contains(line, "evil\nname") || strings.ContainsRune(line, '\x1b') {
+		t.Fatalf("run line contains raw terminal controls: %q", line)
+	}
+	if !strings.Contains(line, `"packages/evil\nname"`) || !strings.Contains(line, `"--config=bad\x1b[2J"`) {
+		t.Fatalf("run line did not quote unsafe values: %q", line)
 	}
 }
 
@@ -1185,15 +1241,16 @@ func TestSelectManagerPlanComposerUsesSafeFlags(t *testing.T) {
 	if plan.Manager != "composer" {
 		t.Fatalf("expected composer manager, got %q", plan.Manager)
 	}
-	if !slices.Equal(plan.Args, []string{"install", "--no-interaction", "--prefer-dist", "--no-scripts"}) {
+	if !slices.Equal(plan.Args, []string{"install", "--no-interaction", "--prefer-dist", "--no-plugins", "--no-scripts"}) {
 		t.Fatalf("unexpected composer args: %#v", plan.Args)
 	}
 }
 
 func TestSelectManagerPlanUnsupportedStillSkips(t *testing.T) {
 	_, ok, reason := selectManagerPlan(detection.DetectionResult{
-		Ecosystem: detection.EcosystemNode,
-		Managers:  []string{"npm", "pnpm"},
+		Ecosystem:    detection.EcosystemNode,
+		Managers:     []string{"npm", "pnpm"},
+		MatchedFiles: []string{"package-lock.json", "pnpm-lock.yaml"},
 	}, false)
 
 	if ok {
@@ -1201,6 +1258,29 @@ func TestSelectManagerPlanUnsupportedStillSkips(t *testing.T) {
 	}
 	if !strings.Contains(reason, "multiple Node lockfiles detected") {
 		t.Fatalf("expected explicit unsupported-manager reason, got %q", reason)
+	}
+}
+
+func TestSelectManagerPlanRejectsMultipleLockfilesForOneNodeManager(t *testing.T) {
+	for _, result := range []detection.DetectionResult{
+		{Ecosystem: detection.EcosystemNode, Managers: []string{"bun"}, MatchedFiles: []string{"bun.lock", "bun.lockb"}},
+		{Ecosystem: detection.EcosystemNode, Managers: []string{"npm"}, MatchedFiles: []string{"package-lock.json", "npm-shrinkwrap.json"}},
+	} {
+		if _, ok, reason := selectManagerPlan(result, false); ok || !strings.Contains(reason, "multiple Node lockfiles") {
+			t.Fatalf("expected same-manager multi-lock result to be blocked, ok=%t reason=%q", ok, reason)
+		}
+	}
+}
+
+func TestSelectManagerPlanBlocksYarnModernExplicitly(t *testing.T) {
+	_, ok, reason := selectManagerPlan(detection.DetectionResult{
+		Ecosystem:    detection.EcosystemNode,
+		Managers:     []string{"yarn"},
+		MatchedFiles: []string{"yarn.lock"},
+		Warnings:     []detection.Warning{{Code: detection.WarningYarnModernUnsupported}},
+	}, false)
+	if ok || !strings.Contains(reason, "Yarn Modern is not supported") {
+		t.Fatalf("expected explicit Yarn Modern block, ok=%t reason=%q", ok, reason)
 	}
 }
 
@@ -1213,19 +1293,19 @@ func TestSelectManagerPlanExpandedManagersUseSafeFlags(t *testing.T) {
 	}{
 		{
 			name:    "node npm",
-			result:  detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"npm"}},
+			result:  detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"npm"}, MatchedFiles: []string{"package-lock.json"}},
 			manager: "npm",
 			args:    []string{"ci", "--ignore-scripts"},
 		},
 		{
 			name:    "node pnpm",
-			result:  detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"pnpm"}},
+			result:  detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"pnpm"}, MatchedFiles: []string{"pnpm-lock.yaml"}},
 			manager: "pnpm",
 			args:    []string{"install", "--frozen-lockfile", "--ignore-scripts"},
 		},
 		{
 			name:    "node yarn",
-			result:  detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"yarn"}},
+			result:  detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"yarn"}, MatchedFiles: []string{"yarn.lock"}},
 			manager: "yarn",
 			args:    []string{"install", "--frozen-lockfile", "--ignore-scripts"},
 		},
@@ -1306,12 +1386,12 @@ func TestSelectManagerPlanAllowScriptsDropsScriptBlockingFlags(t *testing.T) {
 		},
 		{
 			name:   "bun",
-			result: detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"bun"}},
+			result: detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"bun"}, MatchedFiles: []string{"bun.lock"}},
 			args:   []string{"install", "--frozen-lockfile"},
 		},
 		{
 			name:   "npm",
-			result: detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"npm"}},
+			result: detection.DetectionResult{Ecosystem: detection.EcosystemNode, Managers: []string{"npm"}, MatchedFiles: []string{"package-lock.json"}},
 			args:   []string{"ci"},
 		},
 		{

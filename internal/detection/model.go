@@ -16,6 +16,7 @@ type WarningCode string
 
 const (
 	WarningNodeMultipleLockfiles WarningCode = "node_multiple_lockfiles"
+	WarningYarnModernUnsupported WarningCode = "yarn_modern_unsupported"
 )
 
 type Warning struct {

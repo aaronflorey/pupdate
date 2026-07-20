@@ -24,19 +24,24 @@ type preflightOptions struct {
 }
 
 type preflightResult struct {
-	WorkingDirectory    string
-	ConfigPath          string
-	ConfigExists        bool
-	RawConfig           userConfig
-	ResolvedConfig      userConfig
-	StatePath           string
-	StateExists         bool
-	Store               state.Store
-	CurrentState        state.FileState
-	StateWarnings       []string
-	Results             []detection.DetectionResult
-	DecisionByEcosystem map[string]freshness.EcosystemDecision
-	SkipReason          preflightSkipReason
+	WorkingDirectory      string
+	ConfigPath            string
+	ConfigExists          bool
+	RawConfig             userConfig
+	ResolvedUserConfig    userConfig
+	ProjectConfigPath     string
+	ProjectConfigExists   bool
+	RawProjectConfig      projectConfig
+	ResolvedProjectConfig projectConfig
+	ResolvedConfig        userConfig
+	StatePath             string
+	StateExists           bool
+	Store                 state.Store
+	CurrentState          state.FileState
+	StateWarnings         []string
+	Results               []detection.DetectionResult
+	DecisionByEcosystem   map[string]freshness.EcosystemDecision
+	SkipReason            preflightSkipReason
 }
 
 func collectPreflight(options preflightOptions) (preflightResult, error) {
@@ -50,7 +55,8 @@ func collectPreflight(options preflightOptions) (preflightResult, error) {
 		return preflightResult{}, err
 	}
 
-	rawConfig, resolvedConfig, configExists, err := loadPreflightConfig(configPath)
+	projectConfigPath := filepath.Join(workingDirectory, projectConfigFileName)
+	loadedConfig, err := loadPreflightConfig(configPath, projectConfigPath)
 	if err != nil {
 		return preflightResult{}, err
 	}
@@ -62,17 +68,22 @@ func collectPreflight(options preflightOptions) (preflightResult, error) {
 	}
 
 	result := preflightResult{
-		WorkingDirectory: workingDirectory,
-		ConfigPath:       configPath,
-		ConfigExists:     configExists,
-		RawConfig:        rawConfig,
-		ResolvedConfig:   resolvedConfig,
-		StatePath:        statePath,
-		StateExists:      stateExists,
-		Store:            state.NewStore("."),
+		WorkingDirectory:      workingDirectory,
+		ConfigPath:            configPath,
+		ConfigExists:          loadedConfig.UserExists,
+		RawConfig:             loadedConfig.RawUser,
+		ResolvedUserConfig:    loadedConfig.ResolvedUser,
+		ProjectConfigPath:     projectConfigPath,
+		ProjectConfigExists:   loadedConfig.ProjectExists,
+		RawProjectConfig:      loadedConfig.RawProject,
+		ResolvedProjectConfig: loadedConfig.ResolvedProject,
+		ResolvedConfig:        loadedConfig.Effective,
+		StatePath:             statePath,
+		StateExists:           stateExists,
+		Store:                 state.NewStore("."),
 	}
 
-	skipReason, err := collectPreflightSkipReason(resolvedConfig)
+	skipReason, err := collectPreflightSkipReason(loadedConfig.Effective)
 	if err != nil {
 		return preflightResult{}, err
 	}
@@ -94,8 +105,8 @@ func collectPreflight(options preflightOptions) (preflightResult, error) {
 	}
 
 	results, err := detectFn(".", detection.Options{
-		WorkspaceGlobs:  resolvedConfig.WorkspaceGlobs,
-		FolderBlacklist: resolvedConfig.FolderBlacklist,
+		WorkspaceGlobs:  loadedConfig.Effective.WorkspaceGlobs,
+		FolderBlacklist: loadedConfig.Effective.FolderBlacklist,
 	})
 	if err != nil {
 		return preflightResult{}, fmt.Errorf("detection failed: %w", err)
@@ -111,23 +122,52 @@ func collectPreflight(options preflightOptions) (preflightResult, error) {
 	return result, nil
 }
 
-func loadPreflightConfig(configPath string) (userConfig, userConfig, bool, error) {
+type loadedPreflightConfig struct {
+	RawUser         userConfig
+	ResolvedUser    userConfig
+	UserExists      bool
+	RawProject      projectConfig
+	ResolvedProject projectConfig
+	ProjectExists   bool
+	Effective       userConfig
+}
+
+func loadPreflightConfig(configPath string, projectPath string) (loadedPreflightConfig, error) {
 	configExists, err := pathExists(configPath)
 	if err != nil {
-		return userConfig{}, userConfig{}, false, fmt.Errorf("failed to stat %s: %w", configPath, err)
+		return loadedPreflightConfig{}, fmt.Errorf("failed to stat %s: %w", configPath, err)
 	}
-
 	rawConfig, err := readUserConfig(configPath)
 	if err != nil {
-		return userConfig{}, userConfig{}, false, err
+		return loadedPreflightConfig{}, err
 	}
-
 	resolvedConfig, err := resolveUserConfig(rawConfig)
 	if err != nil {
-		return userConfig{}, userConfig{}, false, err
+		return loadedPreflightConfig{}, err
 	}
 
-	return rawConfig, resolvedConfig, configExists, nil
+	projectExists, err := pathExists(projectPath)
+	if err != nil {
+		return loadedPreflightConfig{}, fmt.Errorf("failed to stat %s: %w", projectPath, err)
+	}
+	rawProject, err := readProjectConfig(projectPath)
+	if err != nil {
+		return loadedPreflightConfig{}, err
+	}
+	resolvedProject, err := resolveProjectConfig(rawProject)
+	if err != nil {
+		return loadedPreflightConfig{}, err
+	}
+
+	return loadedPreflightConfig{
+		RawUser:         rawConfig,
+		ResolvedUser:    resolvedConfig,
+		UserExists:      configExists,
+		RawProject:      rawProject,
+		ResolvedProject: resolvedProject,
+		ProjectExists:   projectExists,
+		Effective:       mergeUserAndProjectConfig(resolvedConfig, resolvedProject),
+	}, nil
 }
 
 func pathExists(path string) (bool, error) {

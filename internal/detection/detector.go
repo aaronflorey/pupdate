@@ -1,6 +1,7 @@
 package detection
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -339,9 +340,44 @@ func detectDirectory(dirPath string, relativeDir string) ([]DetectionResult, err
 				Message: "multiple Node lockfiles detected",
 			})
 		}
+		if ecosystem == EcosystemNode && slices.Contains(result.Managers, "yarn") && yarnModernProject(dirPath, entries) {
+			result.Warnings = append(result.Warnings, Warning{
+				Code:    WarningYarnModernUnsupported,
+				Message: "Yarn Modern is not supported; only Yarn Classic 1.x is supported",
+			})
+		}
 
 		results = append(results, result)
 	}
 
 	return results, nil
+}
+
+func yarnModernProject(dirPath string, entries []os.DirEntry) bool {
+	for _, entry := range entries {
+		if entry.IsDir() || (entry.Type()&os.ModeSymlink) != 0 {
+			continue
+		}
+		if entry.Name() == ".yarnrc.yml" {
+			return true
+		}
+	}
+
+	raw, err := os.ReadFile(filepath.Join(dirPath, "package.json"))
+	if err != nil {
+		return false
+	}
+	var manifest struct {
+		PackageManager string `json:"packageManager"`
+	}
+	if json.Unmarshal(raw, &manifest) != nil {
+		return false
+	}
+
+	packageManager := strings.TrimSpace(manifest.PackageManager)
+	if !strings.HasPrefix(packageManager, "yarn@") {
+		return false
+	}
+	version := strings.TrimPrefix(packageManager, "yarn@")
+	return version != "1" && !strings.HasPrefix(version, "1.")
 }
