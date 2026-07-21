@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -171,7 +170,7 @@ func TestCLIIntegrationHookAsyncOnlyLaunchesChild(t *testing.T) {
 	startCalls := 0
 	var startedExecutable string
 	var startedArgs []string
-	startBackgroundProcess = func(executable string, args []string, stderr io.Writer) (int, error) {
+	startBackgroundProcess = func(executable string, args []string) (int, error) {
 		startCalls++
 		startedExecutable = executable
 		startedArgs = append([]string(nil), args...)
@@ -214,7 +213,7 @@ func TestCLIIntegrationHookAsyncLaunchesEvenWhenWorkerLockIsActive(t *testing.T)
 	})
 
 	startCalls := 0
-	startBackgroundProcess = func(string, []string, io.Writer) (int, error) {
+	startBackgroundProcess = func(string, []string) (int, error) {
 		startCalls++
 		return 0, nil
 	}
@@ -250,7 +249,7 @@ func TestCLIIntegrationHookAsyncIgnoresLegacyPIDContents(t *testing.T) {
 	resolveExecutablePath = func() (string, error) {
 		return "/fake/bin/pupdate", nil
 	}
-	startBackgroundProcess = func(string, []string, io.Writer) (int, error) {
+	startBackgroundProcess = func(string, []string) (int, error) {
 		return 31337, nil
 	}
 

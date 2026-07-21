@@ -2,18 +2,14 @@
 
 package main
 
-import "syscall"
+import (
+	"os/exec"
+	"syscall"
+)
 
-func backgroundHookProcessRunning(pid int) (bool, error) {
-	if pid <= 0 {
-		return false, nil
+func configureBackgroundHookCommand(command *exec.Cmd) {
+	if command.SysProcAttr == nil {
+		command.SysProcAttr = &syscall.SysProcAttr{}
 	}
-	err := syscall.Kill(pid, 0)
-	if err == nil || err == syscall.EPERM {
-		return true, nil
-	}
-	if err == syscall.ESRCH {
-		return false, nil
-	}
-	return false, err
+	command.SysProcAttr.Setsid = true
 }

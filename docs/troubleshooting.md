@@ -162,6 +162,19 @@ removing it is neither necessary nor a reliable way to bypass an active lock.
 `uninstall` without `--apply` to preview the next operation. The one-time
 `<target>.pupdate.bak` is recovery material and is never restored automatically.
 
+### Shell hangs after `cd` until pupdate finishes
+
+**Symptom:** After `cd` into a project, the shell freezes with the last pupdate
+log line visible until the background install completes (or until Ctrl+C).
+
+**Cause:** The background hook child process inherited the shell's terminal file
+descriptors. The shell waits for those descriptors to close before showing a new
+prompt, and the child holds them open for the duration of the install.
+
+**Fix:** Upgrade to a version that detaches the background child into a new
+session (`setsid` on Unix) with stdin, stdout, and stderr redirected to
+`/dev/null`. See [Architecture](architecture.md#background-hook-flow-async-mode).
+
 ## Escalation
 
 If none of the above resolves your issue:

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,7 +48,7 @@ func TestLaunchBackgroundHookOnlyLaunchesChild(t *testing.T) {
 
 	var executable string
 	var args []string
-	startBackgroundProcess = func(gotExecutable string, gotArgs []string, _ io.Writer) (int, error) {
+	startBackgroundProcess = func(gotExecutable string, gotArgs []string) (int, error) {
 		executable = gotExecutable
 		args = append([]string(nil), gotArgs...)
 		return 1234, nil
@@ -75,7 +74,7 @@ func TestLaunchBackgroundHookReturnsStartFailure(t *testing.T) {
 		startBackgroundProcess = previousStart
 	})
 	resolveExecutablePath = func() (string, error) { return "/fake/bin/pupdate", nil }
-	startBackgroundProcess = func(string, []string, io.Writer) (int, error) { return 0, errors.New("boom") }
+	startBackgroundProcess = func(string, []string) (int, error) { return 0, errors.New("boom") }
 	err := launchBackgroundHook(&cobra.Command{}, true)
 	if err == nil || !strings.Contains(err.Error(), "failed to start background hook: boom") {
 		t.Fatalf("unexpected launch error: %v", err)

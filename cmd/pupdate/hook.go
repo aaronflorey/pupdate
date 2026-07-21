@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,10 +16,12 @@ var backgroundHookNow = time.Now
 var resolveExecutablePath = os.Executable
 var executeRunFn = executeRun
 
-var startBackgroundProcess = func(executable string, args []string, stderr io.Writer) (int, error) {
+var startBackgroundProcess = func(executable string, args []string) (int, error) {
 	cmd := exec.Command(executable, args...)
-	cmd.Stdout = io.Discard
-	cmd.Stderr = stderr
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	configureBackgroundHookCommand(cmd)
 	if err := cmd.Start(); err != nil {
 		return 0, err
 	}
@@ -68,7 +69,7 @@ func launchBackgroundHook(cmd *cobra.Command, quiet bool) error {
 	if quiet {
 		args = []string{"hook", "--quiet", "--child"}
 	}
-	if _, err := startBackgroundProcess(executable, args, cmd.ErrOrStderr()); err != nil {
+	if _, err := startBackgroundProcess(executable, args); err != nil {
 		return fmt.Errorf("failed to start background hook: %w", err)
 	}
 	return nil

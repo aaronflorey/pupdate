@@ -128,6 +128,8 @@ shell cd → hook snippet → pupdate hook --quiet --async
   ├─ resolveExecutablePath()          → current binary path
   │
   └─ startBackgroundProcess()         → fork: pupdate hook --child
+      ├─ Setsid (Unix)                → new session, detached from terminal
+      └─ stdin/stdout/stderr = /dev/null
 
   (in background child:)
   pupdate hook --child
@@ -139,6 +141,7 @@ shell cd → hook snippet → pupdate hook --quiet --async
 ## Design constraints
 
 - **Low-latency `cd` hook:** The async background mode ensures the shell is never blocked. The hook only checks if `PWD` changed and is not `$HOME`.
+- **Terminal detachment:** The background child runs in a new session (`setsid` on Unix) with stdin, stdout, and stderr connected to `/dev/null`. This prevents the child from holding the shell's terminal file descriptors open, which would block the shell until the child exits.
 - **PATH-based binary resolution:** Manager binaries are resolved via `exec.LookPath` from the current process `PATH`, ensuring compatibility with `nvm`, `asdf`, and `mise`.
 - **Safe defaults:** Composer plugins and scripts are disabled, other lifecycle scripts are disabled where supported, Python managers require opt-in, Yarn Modern is blocked, and frozen/locked modes are used where supported.
 - **Process trees:** On Linux and macOS, every manager runs in its own process group; timeout or cancellation kills descendants before the repository lock is released.
