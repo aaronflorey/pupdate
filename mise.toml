@@ -1,2 +1,27 @@
 [tools]
 go = "1.26"
+hk = "1.51.0"
+
+[tasks.lint]
+description = "Vet Go code"
+run = "go vet ./..."
+
+[tasks.test]
+description = "Run all tests"
+run = "go test ./... -count=1"
+
+[tasks.check]
+description = "Run hk checks on all files"
+run = "hk check --all"
+
+[tasks.fix]
+description = "Apply hk fixes"
+run = "hk fix"
+
+[tasks.build]
+description = "Build the pupdate binary"
+run = "go build ./cmd/pupdate"
+
+[tasks.bench]
+description = "Run CI hot-path benchmarks"
+run = "go test ./internal/detection ./internal/freshness -run '^$' -bench 'Benchmark(DetectProjectTree|HashMatchedFiles)$' -count=1"
