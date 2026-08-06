@@ -86,7 +86,3 @@ func Encode(state FileState) ([]byte, error) {
 func FormatRFC3339UTC(t time.Time) string {
 	return t.UTC().Format(time.RFC3339)
 }
-
-func parseRFC3339UTC(raw string) (time.Time, error) {
-	return time.Parse(time.RFC3339, raw)
-}

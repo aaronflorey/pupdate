@@ -5,14 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	"github.com/spf13/cobra"
 )
 
 const backgroundHookLockFileName = ".pupdate.hook.lock"
 
-var backgroundHookNow = time.Now
 var resolveExecutablePath = os.Executable
 var executeRunFn = executeRun
 
@@ -79,7 +77,7 @@ func backgroundHookLockPath(root string) string {
 	return filepath.Join(root, backgroundHookLockFileName)
 }
 
-func currentBackgroundHookStatus(root string, _ time.Time) (string, string, error) {
+func currentBackgroundHookStatus(root string) (string, string, error) {
 	lockPath := backgroundHookLockPath(root)
 	active, err := repositoryLockActive(root)
 	if err != nil {

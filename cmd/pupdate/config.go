@@ -206,18 +206,19 @@ func stableUnion(first []string, second []string) []string {
 	return result
 }
 
-func loadUserConfig() (userConfig, error) {
-	path, err := resolveUserConfigPath()
-	if err != nil {
-		return userConfig{}, err
+func expandHomeTilde(path string) (string, error) {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		homeCandidates := homeDirectoryCandidates()
+		if len(homeCandidates) == 0 {
+			return "", fmt.Errorf("expand ~: failed to resolve home directory")
+		}
+		homeDir := homeCandidates[0]
+		if path == "~" {
+			return homeDir, nil
+		}
+		return filepath.Join(homeDir, strings.TrimPrefix(path, "~/")), nil
 	}
-
-	cfg, err := readUserConfig(path)
-	if err != nil {
-		return userConfig{}, err
-	}
-
-	return resolveUserConfig(cfg)
+	return path, nil
 }
 
 func expandConfiguredDirectory(path string) (string, error) {
@@ -226,17 +227,10 @@ func expandConfiguredDirectory(path string) (string, error) {
 		return "", nil
 	}
 
-	if trimmed == "~" || strings.HasPrefix(trimmed, "~/") {
-		homeCandidates := homeDirectoryCandidates()
-		if len(homeCandidates) == 0 {
-			return "", fmt.Errorf("expand ~: failed to resolve home directory")
-		}
-		homeDir := homeCandidates[0]
-		if trimmed == "~" {
-			trimmed = homeDir
-		} else {
-			trimmed = filepath.Join(homeDir, strings.TrimPrefix(trimmed, "~/"))
-		}
+	var err error
+	trimmed, err = expandHomeTilde(trimmed)
+	if err != nil {
+		return "", err
 	}
 
 	if !filepath.IsAbs(trimmed) {

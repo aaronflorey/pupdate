@@ -52,10 +52,11 @@ type statusTarget struct {
 
 func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Explain what pupdate would do here",
-		Long:  "Explain why pupdate would run, skip, or fail in the current directory without changing state or running installs.",
-		Args:  cobra.NoArgs,
+		Use:     "status",
+		Short:   "Explain what pupdate would do here",
+		Long:    "Explain why pupdate would run, skip, or fail in the current directory without changing state or running installs.",
+		Example: `pupdate status`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			snapshot, err := collectStatusSnapshot()
 			if err != nil {
@@ -91,7 +92,7 @@ func collectStatusSnapshot() (statusSnapshot, error) {
 		StateWarnings:         preflight.StateWarnings,
 	}
 
-	hookLockPath, hookLockStatus, err := currentBackgroundHookStatus(".", backgroundHookNow())
+	hookLockPath, hookLockStatus, err := currentBackgroundHookStatus(".")
 	if err != nil {
 		return statusSnapshot{}, err
 	}

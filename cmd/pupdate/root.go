@@ -18,8 +18,11 @@ var rootCommandFactory = newRootCmd
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "pupdate",
-		Short:   "Install dependencies on directory entry",
+		Use:   "pupdate",
+		Short: "Install dependencies on directory entry",
+		Long: "pupdate detects supported dependency ecosystems in a directory and runs safe, " +
+			"non-interactive installs when manifests change. It ships a shell hook that runs " +
+			"automatically on directory entry, and caches successful installs in local state.",
 		Version: version,
 	}
 

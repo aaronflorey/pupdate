@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "config",
-		Short: "Show resolved user config",
-		Long:  "Show the resolved user config path and active config values.",
-		Args:  cobra.NoArgs,
+		Use:     "config",
+		Short:   "Show resolved user config",
+		Long:    "Show the resolved user config path and active config values.",
+		Example: `pupdate config`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveUserConfigPath()
 			if err != nil {
@@ -59,15 +59,7 @@ func newConfigCmd() *cobra.Command {
 }
 
 func displayConfigValues(values []string) string {
-	if len(values) == 0 {
-		return "(not set)"
-	}
-
-	displayed := make([]string, len(values))
-	for index, value := range values {
-		displayed[index] = safeDisplay(value)
-	}
-	return strings.Join(displayed, ", ")
+	return displayStatusValues(values, "(not set)")
 }
 
 func displayOptionalBool(value *bool) string {

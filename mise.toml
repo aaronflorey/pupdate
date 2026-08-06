@@ -22,6 +22,10 @@ run = "hk fix"
 description = "Build the pupdate binary"
 run = "go build ./cmd/pupdate"
 
+[tasks.build-local]
+description = "Build the binary and install locally"
+run = "go build -o $HOME/.local/bin/pupdate ./cmd/pupdate"
+
 [tasks.bench]
 description = "Run CI hot-path benchmarks"
 run = "go test ./internal/detection ./internal/freshness -run '^$' -bench 'Benchmark(DetectProjectTree|HashMatchedFiles)$' -count=1"

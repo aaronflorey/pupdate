@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -103,7 +102,7 @@ func TestRepositoryLockTreatsUnlockedLegacyPIDFileAsIdle(t *testing.T) {
 	if !bytes.Equal(raw, legacy) {
 		t.Fatalf("expected legacy contents to remain irrelevant, got %q", raw)
 	}
-	_, status, err := currentBackgroundHookStatus(dir, time.Now())
+	_, status, err := currentBackgroundHookStatus(dir)
 	if err != nil || status != "idle" {
 		t.Fatalf("expected released legacy file to be idle, status=%q err=%v", status, err)
 	}
@@ -119,7 +118,7 @@ func TestRepositoryLockReportsContentionAndPersists(t *testing.T) {
 	if err != nil || acquired {
 		t.Fatalf("expected second acquisition to contend: acquired=%t err=%v", acquired, err)
 	}
-	_, status, err := currentBackgroundHookStatus(dir, time.Now())
+	_, status, err := currentBackgroundHookStatus(dir)
 	if err != nil || status != "active" {
 		t.Fatalf("expected active status, status=%q err=%v", status, err)
 	}

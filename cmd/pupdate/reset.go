@@ -12,10 +12,11 @@ import (
 
 func newResetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "reset",
-		Short: "Delete the local .pupdate state file",
-		Long:  "Remove the .pupdate state file in the current directory so the next run treats all dependencies as stale.",
-		Args:  cobra.NoArgs,
+		Use:     "reset",
+		Short:   "Delete the local .pupdate state file",
+		Long:    "Remove the .pupdate state file in the current directory so the next run treats all dependencies as stale.",
+		Example: `pupdate reset`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return executeReset(cmd)
 		},

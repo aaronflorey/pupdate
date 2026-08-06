@@ -181,17 +181,9 @@ func defaultManagedHookTarget(shell string) (string, error) {
 }
 
 func expandManagedHookPath(path string) (string, error) {
-	expanded := path
-	if expanded == "~" || strings.HasPrefix(expanded, "~/") {
-		homeCandidates := homeDirectoryCandidates()
-		if len(homeCandidates) == 0 {
-			return "", fmt.Errorf("expand ~: failed to resolve home directory")
-		}
-		if expanded == "~" {
-			expanded = homeCandidates[0]
-		} else {
-			expanded = filepath.Join(homeCandidates[0], strings.TrimPrefix(expanded, "~/"))
-		}
+	expanded, err := expandHomeTilde(path)
+	if err != nil {
+		return "", err
 	}
 	if filepath.IsAbs(expanded) {
 		return filepath.Clean(expanded), nil
