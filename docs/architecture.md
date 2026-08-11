@@ -6,54 +6,37 @@ data flow. All paths refer to the repository root.
 ## Repository layout
 
 ```
-cmd/pupdate/          # CLI entry point and all cobra commands
-  root.go             # Root command, version, exit handling
-  run.go              # `pupdate run` command definition
-  run_execution.go    # Run orchestration, preflight, skip logic
-  run_install.go      # Manager plan selection, install execution
-  run_state.go        # State outcome application and persistence
-  init.go             # `pupdate init` command
-  init_manage.go      # Persistent startup-file preview/apply operations
-  init_shell.go       # Shell and mode resolution
-  init_snippets.go    # Snippet generation dispatch
-  init_snippet_bash.go
-  init_snippet_zsh.go
-  init_snippet_fish.go
-  hook.go             # `pupdate hook` (hidden) — async background hook
-  repository_lock*.go # Cross-command repository coordination
-  install_process*.go # Manager process-group cancellation
-  preflight.go        # Pre-run checks: home dir, root_directories, .pupignore
-  config.go           # Strict user/project config, validation, merging
-  effective_action.go # Shared run/status action precedence
-  config_cmd.go       # `pupdate config` command
-  status.go           # `pupdate status` command
-  reset.go            # `pupdate reset` command
+cmd/pupdate/
+  main.go             # Build metadata, signal context, CLI delegation
 internal/
+  cli/                # Cobra commands and orchestration
+  config/             # Strict user/project config loading and merging
   detection/          # Ecosystem detection from lockfiles/manifests
-    detector.go       # Directory scanning and signal matching
-    matrix.go         # Signal-to-ecosystem mapping
-    model.go          # Ecosystem types, DetectionResult
   freshness/          # Freshness evaluation (hash comparison)
-    engine.go         # Core freshness logic, git submodule drift
-    file_identity_darwin.go  # macOS file identity (inode, ctime)
-    file_identity_linux.go   # Linux file identity (inode, ctime)
-    file_identity_other.go   # No-op for unsupported platforms
+  install/            # Safe plans and context-aware manager execution
+  repolock/           # Cross-command advisory coordination
+  shellhook/          # Snippets, managed files, detached launch
   state/              # State file (.pupdate) model and storage
-    model.go          # FileState struct, JSON encode/decode, schema
-    store.go          # Atomic load/save with fsync
+  userenv/            # Home/config/path resolution
 ```
 
 ## Package boundaries
 
-### `cmd/pupdate` (main package)
+### `cmd/pupdate` and `internal/cli`
 
-Contains all cobra commands and the orchestration logic. This package:
+The executable creates a SIGINT/SIGTERM-aware context and delegates to
+`internal/cli.ExecuteContext`. The CLI package:
 
 - Defines the CLI surface (`run`, `init`, `hook`, `config`, `status`, `reset`).
-- Resolves strict user and traversal-only project configuration.
+- Loads strict user and traversal-only project configuration through `internal/config`.
 - Runs preflight checks (home directory, root_directories, .pupignore).
 - Coordinates detection, freshness evaluation, and install execution.
-- Manages state persistence, persistent hook files, and repository locking.
+- Coordinates state persistence, shell-hook services, and repository locking.
+- Captures filesystem, process, lookup, and service dependencies per command so
+  orchestration has no mutable process-wide runtime seams.
+
+Supporting packages keep manager policy, platform process handling, lock
+semantics, and managed shell-file writes separate from Cobra handlers.
 
 ### `internal/detection`
 
@@ -71,7 +54,7 @@ Detects supported dependency ecosystems from lockfiles and manifests.
 Evaluates whether detected ecosystems need updates by comparing current lockfile
 hashes against stored state.
 
-- **Entry point:** `Evaluate(dir string, detections []detection.DetectionResult, current state.FileState) ([]EcosystemDecision, error)`
+- **Entry points:** `EvaluateContext(...)` for decisions and `SnapshotMatchedFiles(...)` for post-install hashes without another Git probe.
 - **Hashing:** SHA-256 of matched lockfiles.
 - **File-identity optimization:** On Linux and macOS, if a file's size, mtime, mode, inode (`file_id`), and ctime (`change_time_unix_nano`) are all unchanged, the stored hash is reused instead of rehashing. On other platforms, files are always rehashed.
 - **Git submodules:** Runs `git submodule status --recursive` independently from each detected Git project directory (2-second timeout) and checks for drift indicators (`-`, `+`, `U` prefixes).
@@ -84,7 +67,7 @@ Manages the `.pupdate` state file.
 
 - **Model:** `FileState` with `Version` (schema 1) and `Ecosystems` map.
 - **State keys:** Ecosystem name for root (e.g. `go`), `<ecosystem>@<directory>` for subdirectories (e.g. `node@apps/web`).
-- **Storage:** `Store` with `Load()` and `Save()`. Saves are atomic (temp file + rename + parent fsync on Unix).
+- **Storage:** `Store.Load()` reports state, warnings, and whether the file existed; `Save()` is atomic (temp file + rename + parent fsync on Unix).
 - **Validation:** Invalid JSON is treated as empty with a warning. Schema version mismatches are treated as empty with a warning.
 
 ## Data flow
@@ -92,11 +75,10 @@ Manages the `.pupdate` state file.
 ```
 pupdate run
   │
-  ├─ acquireRepositoryLock()         → nonblocking advisory lock
+  ├─ repolock.Acquire()              → nonblocking advisory lock
   │
   ├─ collectPreflight()
-  │    ├─ resolveUserConfigPath()     → config path (PUPDATE_CONFIG or default)
-  │    ├─ read user + .pupdate.yaml   → strict, single-document YAML
+  │    ├─ config.Loader.Load()        → user + project config in one read each
   │    ├─ resolve/merge config        → user-first traversal union
   │    ├─ collectPreflightSkipReason()
   │    │    ├─ isHomeDirectory()      → skip if $HOME
@@ -104,7 +86,7 @@ pupdate run
   │    │    └─ hasPupIgnore()         → skip if .pupignore present
   │    ├─ Store.Load()                → current state (or empty)
   │    ├─ detection.DetectWithOptions()  → []DetectionResult
-  │    └─ freshness.Evaluate()        → []EcosystemDecision
+  │    └─ freshness.EvaluateContext() → []EcosystemDecision
   │
   ├─ resolveRunOptions()              → merge config defaults + flags
   │
@@ -112,12 +94,12 @@ pupdate run
   │    └─ for each detection result:
   │         ├─ effectiveActionFor()   → unchanged, disabled, policy, PATH, ready
   │         ├─ if ready:
-  │         │    ├─ runInstall()        → execute command (30-min timeout)
-  │         │    └─ postInstallLockfileState()  → re-hash after install
+  │         │    ├─ install.Runner.Run() → execute command (30-min timeout)
+  │         │    └─ SnapshotMatchedFiles() → re-hash without another Git probe
   │         └─ record outcome
   │
   ├─ saveRunOutcomes()                → save successes before aggregate failure
-  └─ releaseRepositoryLock()
+  └─ release repository lock
 ```
 
 ## Background hook flow (async mode)
@@ -125,15 +107,15 @@ pupdate run
 ```
 shell cd → hook snippet → pupdate hook --quiet --async
   │
-  ├─ resolveExecutablePath()          → current binary path
+  ├─ shellhook.ResolvedExecutablePath() → current binary path
   │
-  └─ startBackgroundProcess()         → fork: pupdate hook --child
+  └─ shellhook.StartBackground()      → fork: pupdate hook --child
       ├─ Setsid (Unix)                → new session, detached from terminal
       └─ stdin/stdout/stderr = /dev/null
 
   (in background child:)
   pupdate hook --child
-    ├─ acquireRepositoryLock()        → same lock as run/reset
+    ├─ repolock.Acquire()             → same lock as run/reset
     ├─ executeRun()                   → full operation while locked
     └─ release lock; coordination file remains
 ```

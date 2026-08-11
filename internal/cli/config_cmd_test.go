@@ -1,0 +1,255 @@
+package cli
+
+import (
+	"bytes"
+	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+func TestConfigShowsPathAndResolvedRootDirectories(t *testing.T) {
+	homeDir := t.TempDir()
+	configHome := filepath.Join(homeDir, ".config")
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	if err := os.WriteFile(configPath, []byte("root_directories:\n  - ~/src\nworkspace_globs:\n  - ' apps/* '\n  - ./services/*\nfolder_blacklist:\n  - ' node_modules '\n  - vendor\nquiet: true\nallow_scripts: true\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd := newTestRootCmd()
+	cmd.SetArgs([]string{"config"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("config command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "path: "+configPath) {
+		t.Fatalf("expected config path in output, got %q", out)
+	}
+	if !strings.Contains(out, "exists: true") {
+		t.Fatalf("expected exists=true in output, got %q", out)
+	}
+	if !strings.Contains(out, "root_directories: ~/src") {
+		t.Fatalf("expected raw root_directories in output, got %q", out)
+	}
+	expectedResolvedRoot, err := expandConfiguredDirectory("~/src")
+	if err != nil {
+		t.Fatalf("resolve expected root_directories value: %v", err)
+	}
+	if !strings.Contains(out, "root_directories_resolved: "+expectedResolvedRoot) {
+		t.Fatalf("expected resolved root_directories in output, got %q", out)
+	}
+	if !strings.Contains(out, "workspace_globs:  apps/* , ./services/*") {
+		t.Fatalf("expected raw workspace_globs in output, got %q", out)
+	}
+	if !strings.Contains(out, "workspace_globs_resolved: apps/*, services/*") {
+		t.Fatalf("expected resolved workspace_globs in output, got %q", out)
+	}
+	if !strings.Contains(out, "folder_blacklist:  node_modules , vendor") {
+		t.Fatalf("expected raw folder_blacklist in output, got %q", out)
+	}
+	if !strings.Contains(out, "folder_blacklist_resolved: node_modules, vendor") {
+		t.Fatalf("expected resolved folder_blacklist in output, got %q", out)
+	}
+	if !strings.Contains(out, "quiet: true") {
+		t.Fatalf("expected quiet=true in output, got %q", out)
+	}
+	if !strings.Contains(out, "allow_scripts: true") {
+		t.Fatalf("expected allow_scripts=true in output, got %q", out)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
+func TestConfigShowsUnsetValuesWhenConfigIsMissing(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd := newTestRootCmd()
+	cmd.SetArgs([]string{"config"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("config command failed: %v (stderr=%q)", err, stderr.String())
+	}
+
+	out := stdout.String()
+	expectedPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	if !strings.Contains(out, "path: "+expectedPath) {
+		t.Fatalf("expected missing config path in output, got %q", out)
+	}
+	if !strings.Contains(out, "exists: false") {
+		t.Fatalf("expected exists=false in output, got %q", out)
+	}
+	if !strings.Contains(out, "root_directories: (not set)") {
+		t.Fatalf("expected unset root_directories in output, got %q", out)
+	}
+	if !strings.Contains(out, "root_directories_resolved: (not set)") {
+		t.Fatalf("expected unset resolved root_directories in output, got %q", out)
+	}
+	if !strings.Contains(out, "workspace_globs: (not set)") {
+		t.Fatalf("expected unset workspace_globs in output, got %q", out)
+	}
+	if !strings.Contains(out, "workspace_globs_resolved: (not set)") {
+		t.Fatalf("expected unset resolved workspace_globs in output, got %q", out)
+	}
+	if !strings.Contains(out, "folder_blacklist: (not set)") {
+		t.Fatalf("expected unset folder_blacklist in output, got %q", out)
+	}
+	if !strings.Contains(out, "folder_blacklist_resolved: (not set)") {
+		t.Fatalf("expected unset resolved folder_blacklist in output, got %q", out)
+	}
+	if !strings.Contains(out, "quiet: (not set)") {
+		t.Fatalf("expected unset quiet in output, got %q", out)
+	}
+	if !strings.Contains(out, "allow_scripts: (not set)") {
+		t.Fatalf("expected unset allow_scripts in output, got %q", out)
+	}
+
+	if _, err := os.Stat(expectedPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected config command to leave config missing, err=%v", err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
+func TestConfigReturnsParseErrorWhenYAMLIsInvalid(t *testing.T) {
+	homeDir := t.TempDir()
+	configHome := filepath.Join(homeDir, ".config")
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	if err := os.WriteFile(configPath, []byte("root_directories: [oops\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	cmd := newTestRootCmd()
+	cmd.SetArgs([]string{"config"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected config command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to parse "+configPath) {
+		t.Fatalf("expected parse error with config path, got %q", err.Error())
+	}
+}
+
+func TestConfigReturnsWorkspaceGlobValidationError(t *testing.T) {
+	homeDir := t.TempDir()
+	configHome := filepath.Join(homeDir, ".config")
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	if err := os.WriteFile(configPath, []byte("workspace_globs:\n  - ../apps/*\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	cmd := newTestRootCmd()
+	cmd.SetArgs([]string{"config"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected config command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to resolve workspace_globs[0]") {
+		t.Fatalf("expected workspace_globs validation error, got %q", err.Error())
+	}
+}
+
+func TestConfigReturnsFolderBlacklistValidationError(t *testing.T) {
+	homeDir := t.TempDir()
+	configHome := filepath.Join(homeDir, ".config")
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	writeFixtureFiles(t, configHome, filepath.Join("pupdate", "config.yaml"))
+	if err := os.WriteFile(configPath, []byte("folder_blacklist:\n  - foo/bar\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	cmd := newTestRootCmd()
+	cmd.SetArgs([]string{"config"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected config command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to resolve folder_blacklist[0]") {
+		t.Fatalf("expected folder_blacklist validation error, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "exact directory name, not a path") {
+		t.Fatalf("expected folder_blacklist validation reason, got %q", err.Error())
+	}
+}
+
+func TestConfigReturnsUserConfigDirResolutionError(t *testing.T) {
+	t.Cleanup(func() {
+		userConfigDir = os.UserConfigDir
+		runtimeGOOS = runtime.GOOS
+	})
+	runtimeGOOS = "linux"
+	userConfigDir = func() (string, error) {
+		return "", errors.New("boom")
+	}
+
+	cmd := newTestRootCmd()
+	cmd.SetArgs([]string{"config"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected config command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to resolve user config directory: boom") {
+		t.Fatalf("expected config-dir resolution error, got %q", err.Error())
+	}
+}
+
+func TestConfigReturnsReadErrorWhenConfigPathIsDirectory(t *testing.T) {
+	configHome := t.TempDir()
+	configPath := filepath.Join(configHome, "pupdate", "config.yaml")
+	if err := os.MkdirAll(configPath, 0o755); err != nil {
+		t.Fatalf("mkdir config path: %v", err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	cmd := newTestRootCmd()
+	cmd.SetArgs([]string{"config"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected config command to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to read "+configPath) {
+		t.Fatalf("expected read error with config path, got %q", err.Error())
+	}
+}

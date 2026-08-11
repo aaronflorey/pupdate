@@ -1,7 +1,7 @@
 # Troubleshooting
 
 This document covers common symptoms, their likely causes, and fixes. All
-status messages documented here come from the source code in `cmd/pupdate/`.
+status messages documented here come from the source code in `internal/cli/`.
 
 ## Diagnostic commands
 
@@ -22,7 +22,7 @@ status messages documented here come from the source code in `cmd/pupdate/`.
 
 1. **You are in `$HOME`.** pupdate skips the home directory by design.
    - Message (without `--quiet`): `pupdate: skip repo ($HOME)`
-   - Source: `cmd/pupdate/preflight.go` (`collectPreflightSkipReason`).
+   - Source: `internal/cli/preflight.go` (`collectPreflightSkipReason`).
 
 2. **`root_directories` is configured and you are outside them.**
    - Message: `pupdate: skip repo (outside configured root_directories)`

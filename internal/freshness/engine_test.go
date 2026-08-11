@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -42,6 +43,52 @@ func TestEvaluateNoStateRuns(t *testing.T) {
 	}
 	if results[0].Reason != "missing prior lockfile hash" {
 		t.Fatalf("expected missing-prior-hash reason, got %q", results[0].Reason)
+	}
+}
+
+func TestEvaluateContextReturnsCancellationBeforeWork(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := EvaluateContext(ctx, t.TempDir(), []detection.DetectionResult{{
+		Ecosystem:    detection.EcosystemNode,
+		MatchedFiles: []string{"missing.lock"},
+	}}, state.Empty())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation, got %v", err)
+	}
+}
+
+func TestHashReaderReturnsCancellationBetweenReads(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	reader := &cancelAfterRead{
+		Reader: strings.NewReader(strings.Repeat("x", 64*1024)),
+		cancel: cancel,
+	}
+
+	_, err := hashReader(ctx, reader)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation, got %v", err)
+	}
+}
+
+type cancelAfterRead struct {
+	io.Reader
+	cancel func()
+}
+
+func (r *cancelAfterRead) Read(buffer []byte) (int, error) {
+	read, err := r.Reader.Read(buffer)
+	r.cancel()
+	return read, err
+}
+
+func TestLockfilesEqualRequiresMatchingKeysAndValues(t *testing.T) {
+	if !lockfilesEqual(map[string]string{"a": "1", "b": "2"}, map[string]string{"b": "2", "a": "1"}) {
+		t.Fatal("expected reordered maps to compare equal")
+	}
+	if lockfilesEqual(map[string]string{"a": ""}, map[string]string{"b": ""}) {
+		t.Fatal("expected different keys with empty values to compare unequal")
 	}
 }
 
@@ -132,7 +179,7 @@ func TestEvaluateMatchingIdentityAndMetadataReusesStoredHash(t *testing.T) {
 
 	originalHashFile := hashFileFn
 	called := 0
-	hashFileFn = func(string) (string, error) {
+	hashFileFn = func(context.Context, string) (string, error) {
 		called++
 		return hashText("same"), nil
 	}
@@ -176,7 +223,7 @@ func TestEvaluateMatchingMetadataWithoutStrongIdentityStillRehashesLockfile(t *t
 
 	originalHashFile := hashFileFn
 	called := 0
-	hashFileFn = func(string) (string, error) {
+	hashFileFn = func(context.Context, string) (string, error) {
 		called++
 		return hashText("same"), nil
 	}
@@ -220,9 +267,9 @@ func TestEvaluateChangedMetadataRehashesLockfile(t *testing.T) {
 
 	originalHashFile := hashFileFn
 	called := 0
-	hashFileFn = func(path string) (string, error) {
+	hashFileFn = func(_ context.Context, path string) (string, error) {
 		called++
-		return originalHashFile(path)
+		return originalHashFile(context.Background(), path)
 	}
 	t.Cleanup(func() {
 		hashFileFn = originalHashFile
@@ -495,7 +542,7 @@ func TestEvaluateGitSubmoduleDriftOverridesUnchangedHashDecision(t *testing.T) {
 		},
 	}
 
-	gitSubmoduleStatusFn = func(string) ([]string, error) {
+	gitSubmoduleStatusFn = func(context.Context, string) ([]string, error) {
 		return []string{"-3f4d1f0 libs/foo"}, nil
 	}
 	t.Cleanup(func() {
@@ -529,7 +576,7 @@ func TestEvaluateGitSubmoduleStatusFailureDoesNotFailEvaluation(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, ".gitmodules", "[submodule \"libs/foo\"]\n")
 
-	gitSubmoduleStatusFn = func(string) ([]string, error) {
+	gitSubmoduleStatusFn = func(context.Context, string) ([]string, error) {
 		return nil, errors.New("status failed")
 	}
 	t.Cleanup(func() {
@@ -558,13 +605,57 @@ func TestEvaluateGitSubmoduleStatusFailureDoesNotFailEvaluation(t *testing.T) {
 	}
 }
 
+func TestEvaluateGitSubmoduleStatusPropagatesCallerCancellation(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, ".gitmodules", "[submodule \"libs/foo\"]\n")
+	ctx, cancel := context.WithCancel(context.Background())
+
+	gitSubmoduleStatusFn = func(context.Context, string) ([]string, error) {
+		cancel()
+		return nil, context.Canceled
+	}
+	t.Cleanup(func() {
+		gitSubmoduleStatusFn = defaultGitSubmoduleStatus
+	})
+
+	_, err := EvaluateContext(ctx, dir, []detection.DetectionResult{{
+		Ecosystem:    detection.EcosystemGit,
+		MatchedFiles: []string{".gitmodules"},
+	}}, state.Empty())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected caller cancellation, got %v", err)
+	}
+}
+
+func TestEvaluateGitSubmoduleStatusChecksCancellationAfterSuccessfulProbe(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, ".gitmodules", "[submodule \"libs/foo\"]\n")
+	ctx, cancel := context.WithCancel(context.Background())
+
+	gitSubmoduleStatusFn = func(context.Context, string) ([]string, error) {
+		cancel()
+		return nil, nil
+	}
+	t.Cleanup(func() {
+		gitSubmoduleStatusFn = defaultGitSubmoduleStatus
+	})
+
+	_, err := EvaluateContext(ctx, dir, []detection.DetectionResult{{
+		Ecosystem:    detection.EcosystemGit,
+		MatchedFiles: []string{".gitmodules"},
+	}}, state.Empty())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected caller cancellation, got %v", err)
+	}
+}
+
 func TestEvaluateUsesEachDetectedGitProjectDirectory(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, ".gitmodules", "root")
 	writeFile(t, dir, "nested/.gitmodules", "nested")
 
 	var probed []string
-	gitSubmoduleStatusFn = func(path string) ([]string, error) {
+	gitSubmoduleStatusFn = func(_ context.Context, path string) ([]string, error) {
 		probed = append(probed, path)
 		return nil, nil
 	}
@@ -596,7 +687,7 @@ func TestDefaultGitSubmoduleStatusTimesOut(t *testing.T) {
 		gitSubmoduleStatusTimeout = originalTimeout
 	})
 
-	_, err := defaultGitSubmoduleStatus(t.TempDir())
+	_, err := defaultGitSubmoduleStatus(context.Background(), t.TempDir())
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}
@@ -614,7 +705,7 @@ func TestDefaultGitSubmoduleStatusIncludesStderr(t *testing.T) {
 		runGitSubmoduleStatusCommand = originalRunner
 	})
 
-	_, err := defaultGitSubmoduleStatus(t.TempDir())
+	_, err := defaultGitSubmoduleStatus(context.Background(), t.TempDir())
 	if err == nil {
 		t.Fatal("expected command error")
 	}

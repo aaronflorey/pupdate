@@ -20,7 +20,7 @@ configuration cannot remove a user exclusion.
 
 ### Config path resolution
 
-The config path is resolved in `cmd/pupdate/config.go` (`resolveUserConfigPath`):
+The config path is resolved by `internal/config.Loader.UserPath`:
 
 1. If `PUPDATE_CONFIG` is set and non-empty, its value is resolved to an absolute path (relative to the current working directory) and used.
 2. Otherwise, the default config directory is resolved:
@@ -84,7 +84,7 @@ allow_scripts: false
 - **`~` expansion:** Yes, expands to the user's home directory.
 - **Behavior:** When set, `pupdate run` only executes when the current working directory is a **direct child** of one of the configured roots. If the working directory is not a direct child of any root, the run is skipped with: `pupdate: skip repo (outside configured root_directories)`.
 - **Validation:** Each entry is resolved to an absolute path. Invalid paths produce an error.
-- **Consumed in:** `cmd/pupdate/preflight.go` (`collectPreflightSkipReason` → `isOutsideConfiguredRootDirectories`), `cmd/pupdate/run_execution.go`.
+- **Consumed in:** `internal/cli/preflight.go` (`collectPreflightSkipReason` → `isOutsideConfiguredRootDirectories`), `internal/cli/run_execution.go`.
 
 ### `workspace_globs`
 
@@ -133,14 +133,14 @@ folder_blacklist:
 - **Type:** boolean (pointer — `nil` means "not set")
 - **Default:** `nil` (not set — falls back to the `--quiet` flag default of `false`)
 - **Behavior:** Sets the default quiet mode for `run`. When `true`, no-op output and child command output are suppressed. An explicit `--quiet` or `--quiet=false` flag on the command line always wins.
-- **Consumed in:** `cmd/pupdate/run_execution.go` (`resolveRunOptions`).
+- **Consumed in:** `internal/cli/run_execution.go` (`resolveRunOptions`).
 
 ### `allow_scripts`
 
 - **Type:** boolean (pointer — `nil` means "not set")
 - **Default:** `nil` (not set — falls back to the `--allow-scripts` flag default of `false`)
 - **Behavior:** Sets the default lifecycle-script policy for `run`. When `true`, dependency manager lifecycle scripts are allowed where supported, and Python installs are opted in. An explicit `--allow-scripts` flag on the command line always wins.
-- **Consumed in:** `cmd/pupdate/run_execution.go` (`resolveRunOptions`).
+- **Consumed in:** `internal/cli/run_execution.go` (`resolveRunOptions`).
 
 ## Environment variables
 
@@ -148,7 +148,7 @@ folder_blacklist:
 
 - **Purpose:** Override the config file path for a single invocation.
 - **Resolution:** Relative paths resolve from the current working directory to an absolute path.
-- **Consumed in:** `cmd/pupdate/config.go` (`resolveUserConfigPath`).
+- **Consumed in:** `internal/config.Loader.UserPath`.
 
 ```bash
 PUPDATE_CONFIG=/path/to/config.yaml pupdate run
@@ -160,7 +160,7 @@ PUPDATE_CONFIG=/path/to/config.yaml pupdate run
 - **Accepted values:** `1`, `true`, `yes` (case-insensitive). Other values do not disable installs.
 - **Behavior:** When active, pupdate detects ecosystems and prints status but does not execute any install commands or save state.
 - **Output:** `pupdate: installs disabled via PUPDATE_SKIP_INSTALL`
-- **Consumed in:** `cmd/pupdate/run_execution.go` (`isInstallDisabled`).
+- **Consumed in:** `internal/cli/run_execution.go` (`isInstallDisabled`).
 
 ```bash
 PUPDATE_SKIP_INSTALL=1 pupdate run
@@ -171,7 +171,7 @@ PUPDATE_SKIP_INSTALL=1 pupdate run
 - **Purpose:** Short-circuit the entire pupdate run for a repository before detection, freshness checks, and installs.
 - **Location:** A file named `.pupignore` in the repository root.
 - **Behavior:** When present (as a file, not a directory), the run is skipped immediately with: `pupdate: skip repo (.pupignore)`.
-- **Consumed in:** `cmd/pupdate/run_execution.go` (`hasPupIgnore`), `cmd/pupdate/preflight.go`.
+- **Consumed in:** `internal/cli/run_execution.go` (`hasPupIgnore`), `internal/cli/preflight.go`.
 
 ## State file: `.pupdate`
 

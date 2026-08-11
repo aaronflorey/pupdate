@@ -1,7 +1,6 @@
 package freshness
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -52,20 +50,32 @@ type EcosystemDecision struct {
 }
 
 func Evaluate(dir string, detections []detection.DetectionResult, current state.FileState) ([]EcosystemDecision, error) {
+	return EvaluateContext(context.Background(), dir, detections, current)
+}
+
+func EvaluateContext(ctx context.Context, dir string, detections []detection.DetectionResult, current state.FileState) ([]EcosystemDecision, error) {
 	decisions := make([]EcosystemDecision, 0, len(detections))
 
 	for _, result := range detections {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		ecosystem := string(result.Ecosystem)
 		stateKey := result.StateKey()
 		ecosystemState, hasState := current.Ecosystems[stateKey]
-		if !hasState && (result.Directory == "" || result.Directory == ".") {
+		if !hasState && result.IsRoot() {
 			ecosystemState, hasState = current.Ecosystems[ecosystem]
 		}
 
-		lockfiles, lockfileMetadata, err := hashMatchedFiles(dir, result.MatchedFiles, ecosystemState)
+		snapshot, err := SnapshotMatchedFiles(ctx, dir, result.MatchedFiles, ecosystemState)
 		if err != nil {
 			return nil, err
 		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		lockfiles := snapshot.Lockfiles
+		lockfileMetadata := snapshot.LockfileMetadata
 
 		storedLockfiles := comparableLockfiles(result.Ecosystem, ecosystemState.Lockfiles)
 		decision := EcosystemDecision{
@@ -98,10 +108,13 @@ func Evaluate(dir string, detections []detection.DetectionResult, current state.
 
 		if result.Ecosystem == detection.EcosystemGit {
 			gitDirectory := dir
-			if result.Directory != "" && result.Directory != "." {
+			if !result.IsRoot() {
 				gitDirectory = filepath.Join(dir, result.Directory)
 			}
-			lines, err := gitSubmoduleStatusFn(gitDirectory)
+			lines, err := gitSubmoduleStatusFn(ctx, gitDirectory)
+			if cancellationErr := ctx.Err(); cancellationErr != nil {
+				return nil, cancellationErr
+			}
 			if err != nil {
 				decision.Decision = DecisionSkip
 				decision.Reason = fmt.Sprintf("git submodule status failed: %v", err)
@@ -143,7 +156,7 @@ func comparableLockfiles(ecosystem detection.Ecosystem, lockfiles map[string]str
 }
 
 func phpProjectPath(dir string, result detection.DetectionResult) string {
-	if result.Directory == "" || result.Directory == "." {
+	if result.IsRoot() {
 		return dir
 	}
 	return filepath.Join(dir, result.Directory)
@@ -160,8 +173,8 @@ func isDirectory(path string) (bool, error) {
 	return info.IsDir(), nil
 }
 
-func defaultGitSubmoduleStatus(dir string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), gitSubmoduleStatusTimeout)
+func defaultGitSubmoduleStatus(parent context.Context, dir string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(parent, gitSubmoduleStatusTimeout)
 	defer cancel()
 
 	output, stderr, err := runGitSubmoduleStatusCommand(ctx, dir)
@@ -169,7 +182,7 @@ func defaultGitSubmoduleStatus(dir string) ([]string, error) {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return nil, fmt.Errorf("timed out after %s", gitSubmoduleStatusTimeout)
 		}
-		trimmed := strings.TrimSpace(string(bytes.TrimSpace(stderr)))
+		trimmed := strings.TrimSpace(string(stderr))
 		if trimmed != "" {
 			return nil, fmt.Errorf("%w: %s", err, trimmed)
 		}
@@ -200,12 +213,32 @@ func hasGitSubmoduleDrift(lines []string) bool {
 	return false
 }
 
-var hashFileFn = hashFile
+var hashFileFn = hashFileContext
+
+type MatchedFilesSnapshot struct {
+	Lockfiles        map[string]string
+	LockfileMetadata map[string]state.LockfileMetadata
+}
+
+func SnapshotMatchedFiles(ctx context.Context, dir string, matchedFiles []string, previous state.EcosystemState) (MatchedFilesSnapshot, error) {
+	lockfiles, metadata, err := snapshotMatchedFiles(ctx, dir, matchedFiles, previous)
+	if err != nil {
+		return MatchedFilesSnapshot{}, err
+	}
+	return MatchedFilesSnapshot{Lockfiles: lockfiles, LockfileMetadata: metadata}, nil
+}
 
 func hashMatchedFiles(dir string, matchedFiles []string, previous state.EcosystemState) (map[string]string, map[string]state.LockfileMetadata, error) {
+	return snapshotMatchedFiles(context.Background(), dir, matchedFiles, previous)
+}
+
+func snapshotMatchedFiles(ctx context.Context, dir string, matchedFiles []string, previous state.EcosystemState) (map[string]string, map[string]state.LockfileMetadata, error) {
 	lockfiles := make(map[string]string, len(matchedFiles))
 	metadata := make(map[string]state.LockfileMetadata, len(matchedFiles))
 	for _, matchedFile := range matchedFiles {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
 		fullPath := filepath.Join(dir, matchedFile)
 		info, err := os.Stat(fullPath)
 		if err != nil {
@@ -226,7 +259,7 @@ func hashMatchedFiles(dir string, matchedFiles []string, previous state.Ecosyste
 			continue
 		}
 
-		hash, err := hashFileFn(fullPath)
+		hash, err := hashFileFn(ctx, fullPath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("hash matched file %q: %w", matchedFile, err)
 		}
@@ -251,17 +284,37 @@ func canReuseStoredLockfileHash(current state.LockfileMetadata, previous state.L
 }
 
 func hashFile(path string) (string, error) {
+	return hashFileContext(context.Background(), path)
+}
+
+func hashFileContext(ctx context.Context, path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
 
+	return hashReader(ctx, file)
+}
+
+func hashReader(ctx context.Context, reader io.Reader) (string, error) {
 	hasher := sha256.New()
-	if _, err := io.Copy(hasher, file); err != nil {
+	if _, err := io.Copy(hasher, contextReader{Context: ctx, Reader: reader}); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+type contextReader struct {
+	context.Context
+	io.Reader
+}
+
+func (r contextReader) Read(buffer []byte) (int, error) {
+	if err := r.Context.Err(); err != nil {
+		return 0, err
+	}
+	return r.Reader.Read(buffer)
 }
 
 func lockfilesEqual(a, b map[string]string) bool {
@@ -269,14 +322,9 @@ func lockfilesEqual(a, b map[string]string) bool {
 		return false
 	}
 
-	keys := make([]string, 0, len(a))
-	for key := range a {
-		keys = append(keys, key)
-	}
-	slices.Sort(keys)
-
-	for _, key := range keys {
-		if a[key] != b[key] {
+	for key, value := range a {
+		other, ok := b[key]
+		if !ok || other != value {
 			return false
 		}
 	}

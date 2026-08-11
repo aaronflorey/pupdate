@@ -242,42 +242,13 @@ func detectDirectory(dirPath string, relativeDir string) ([]DetectionResult, err
 		return nil, err
 	}
 
-	filesByEcosystem := map[Ecosystem][]string{
-		EcosystemNode:    {},
-		EcosystemPHP:     {},
-		EcosystemGo:      {},
-		EcosystemRust:    {},
-		EcosystemPython:  {},
-		EcosystemKasetto: {},
-		EcosystemGit:     {},
+	type ecosystemMatches struct {
+		files        []string
+		managers     []string
+		seenFiles    map[string]struct{}
+		seenManagers map[string]struct{}
 	}
-	managersByEcosystem := map[Ecosystem][]string{
-		EcosystemNode:    {},
-		EcosystemPHP:     {},
-		EcosystemGo:      {},
-		EcosystemRust:    {},
-		EcosystemPython:  {},
-		EcosystemKasetto: {},
-		EcosystemGit:     {},
-	}
-	fileSeen := map[Ecosystem]map[string]bool{
-		EcosystemNode:    {},
-		EcosystemPHP:     {},
-		EcosystemGo:      {},
-		EcosystemRust:    {},
-		EcosystemPython:  {},
-		EcosystemKasetto: {},
-		EcosystemGit:     {},
-	}
-	managerSeen := map[Ecosystem]map[string]bool{
-		EcosystemNode:    {},
-		EcosystemPHP:     {},
-		EcosystemGo:      {},
-		EcosystemRust:    {},
-		EcosystemPython:  {},
-		EcosystemKasetto: {},
-		EcosystemGit:     {},
-	}
+	matchesByEcosystem := make(map[Ecosystem]*ecosystemMatches)
 
 	for _, entry := range entries {
 		if entry.IsDir() || (entry.Type()&os.ModeSymlink) != 0 {
@@ -291,13 +262,21 @@ func detectDirectory(dirPath string, relativeDir string) ([]DetectionResult, err
 		}
 		name := signal.name
 		ecosystem := signal.ecosystem
+		matches := matchesByEcosystem[ecosystem]
+		if matches == nil {
+			matches = &ecosystemMatches{
+				seenFiles:    make(map[string]struct{}),
+				seenManagers: make(map[string]struct{}),
+			}
+			matchesByEcosystem[ecosystem] = matches
+		}
 
-		if !fileSeen[ecosystem][name] {
-			fileSeen[ecosystem][name] = true
+		if _, seen := matches.seenFiles[name]; !seen {
+			matches.seenFiles[name] = struct{}{}
 			if relativeDir == "." {
-				filesByEcosystem[ecosystem] = append(filesByEcosystem[ecosystem], matchedName)
+				matches.files = append(matches.files, matchedName)
 			} else {
-				filesByEcosystem[ecosystem] = append(filesByEcosystem[ecosystem], filepath.ToSlash(filepath.Join(relativeDir, matchedName)))
+				matches.files = append(matches.files, filepath.ToSlash(filepath.Join(relativeDir, matchedName)))
 			}
 		} else if matchedName == name {
 			preferredPath := matchedName
@@ -305,36 +284,38 @@ func detectDirectory(dirPath string, relativeDir string) ([]DetectionResult, err
 				preferredPath = filepath.ToSlash(filepath.Join(relativeDir, matchedName))
 			}
 
-			for i, existing := range filesByEcosystem[ecosystem] {
+			for i, existing := range matches.files {
 				if strings.EqualFold(filepath.Base(existing), name) {
-					filesByEcosystem[ecosystem][i] = preferredPath
+					matches.files[i] = preferredPath
 					break
 				}
 			}
 		}
-		if signal.manager != "" && !managerSeen[ecosystem][signal.manager] {
-			managerSeen[ecosystem][signal.manager] = true
-			managersByEcosystem[ecosystem] = append(managersByEcosystem[ecosystem], signal.manager)
+		if signal.manager != "" {
+			if _, seen := matches.seenManagers[signal.manager]; !seen {
+				matches.seenManagers[signal.manager] = struct{}{}
+				matches.managers = append(matches.managers, signal.manager)
+			}
 		}
 	}
 
 	var results []DetectionResult
 	for _, ecosystem := range ecosystemOrder {
-		matched := filesByEcosystem[ecosystem]
-		if len(matched) == 0 {
+		matches := matchesByEcosystem[ecosystem]
+		if matches == nil || len(matches.files) == 0 {
 			continue
 		}
-		slices.Sort(matched)
-		slices.Sort(managersByEcosystem[ecosystem])
+		slices.Sort(matches.files)
+		slices.Sort(matches.managers)
 
 		result := DetectionResult{
 			Ecosystem:    ecosystem,
 			Directory:    relativeDir,
-			Managers:     managersByEcosystem[ecosystem],
-			MatchedFiles: matched,
+			Managers:     matches.managers,
+			MatchedFiles: matches.files,
 		}
 
-		if ecosystem == EcosystemNode && len(matched) > 1 {
+		if ecosystem == EcosystemNode && len(matches.files) > 1 {
 			result.Warnings = append(result.Warnings, Warning{
 				Code:    WarningNodeMultipleLockfiles,
 				Message: "multiple Node lockfiles detected",

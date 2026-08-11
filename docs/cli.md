@@ -1,7 +1,7 @@
 # CLI Reference
 
-pupdate is a Cobra-based CLI. The root command is `pupdate`. All commands are
-defined in `cmd/pupdate/`.
+pupdate is a Cobra-based CLI. The root command is `pupdate`; command definitions
+live in `internal/cli/`, and `cmd/pupdate/main.go` is the thin executable entrypoint.
 
 ## `pupdate`
 
@@ -247,6 +247,11 @@ pupdate status
 |------|---------|
 | `0` | Command completed successfully (including skips and no-ops). |
 | `1` | Command failed, a manual operation contended on the lock, or one or more managers failed. The error is printed once as `pupdate: error: <err>`. |
+
+SIGINT or SIGTERM cancels the active manager, stops later targets, saves any
+earlier successful outcomes, releases the repository lock, and exits 1 with
+`pupdate: error: operation canceled`. On Linux and macOS, cancellation
+terminates the manager's process group so descendants cannot retain the lock.
 
 Repository-derived strings containing control characters, DEL, or terminal
 escapes are rendered using quoted ASCII escapes in all command output.

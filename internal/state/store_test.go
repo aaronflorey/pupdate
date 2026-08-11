@@ -11,7 +11,11 @@ func TestLoadMissingFileReturnsEmpty(t *testing.T) {
 	dir := t.TempDir()
 	store := NewStore(dir)
 
-	got, warnings, err := store.Load()
+	loaded, err := store.Load()
+	got, warnings := loaded.State, loaded.Warnings
+	if loaded.Exists {
+		t.Fatal("Load() Exists = true for missing state")
+	}
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -34,7 +38,11 @@ func TestLoadCorruptFileReturnsWarningAndEmpty(t *testing.T) {
 	}
 
 	store := NewStore(dir)
-	got, warnings, err := store.Load()
+	loaded, err := store.Load()
+	got, warnings := loaded.State, loaded.Warnings
+	if !loaded.Exists {
+		t.Fatal("Load() Exists = false for corrupt state")
+	}
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -135,7 +143,11 @@ func TestSaveThenLoadRoundTrip(t *testing.T) {
 		t.Fatalf("Save() error = %v", err)
 	}
 
-	got, warnings, err := store.Load()
+	loaded, err := store.Load()
+	got, warnings := loaded.State, loaded.Warnings
+	if !loaded.Exists {
+		t.Fatal("Load() Exists = false after save")
+	}
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}

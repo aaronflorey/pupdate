@@ -15,26 +15,32 @@ type Store struct {
 	Dir string
 }
 
+type LoadResult struct {
+	State    FileState
+	Warnings []string
+	Exists   bool
+}
+
 func NewStore(dir string) Store {
 	return Store{Dir: dir}
 }
 
-func (s Store) Load() (FileState, []string, error) {
+func (s Store) Load() (LoadResult, error) {
 	path := filepath.Join(s.Dir, FileName)
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return Empty(), nil, nil
+			return LoadResult{State: Empty()}, nil
 		}
-		return Empty(), nil, err
+		return LoadResult{}, err
 	}
 
 	state, warnings, err := Decode(raw)
 	if err != nil {
-		return Empty(), []string{invalidStateWarning}, nil
+		return LoadResult{State: Empty(), Warnings: []string{invalidStateWarning}, Exists: true}, nil
 	}
 
-	return state, warnings, nil
+	return LoadResult{State: state, Warnings: warnings, Exists: true}, nil
 }
 
 func (s Store) Save(state FileState) error {

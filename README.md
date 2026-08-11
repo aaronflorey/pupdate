@@ -316,10 +316,15 @@ Manual runs use stable, concise stderr prefixes:
 - `pupdate: run <manager> <args> (in <subdir>)`
 - `pupdate: done <manager> (in <subdir>)`
 - `pupdate: error: dependency installs failed: <manager> install failed for <target>: <err>`
+- `pupdate: error: operation canceled`
 
 Successful `--quiet` hook runs are fully silent, including successful updates.
 Failures still produce one final error. Repository-derived control characters
 are rendered with quoted ASCII escapes so output cannot forge terminal lines.
+SIGINT and SIGTERM cancel the active manager, stop later targets, save earlier
+successful outcomes, and release the repository lock. On Linux and macOS,
+cancellation terminates the manager's process group so descendants do not keep
+the lock alive.
 
 These messages are meant to stay readable in interactive shells and easy to grep
 from shell history or logs.

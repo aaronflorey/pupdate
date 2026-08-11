@@ -18,7 +18,7 @@ mise exec -- go test ./internal/detection ./internal/freshness -run '^$' -bench 
 Run a focused test while refactoring:
 
 ```bash
-mise exec -- go test ./cmd/pupdate -count=1
+mise exec -- go test ./internal/cli -count=1
 ```
 
 Before opening a pull request, mirror CI order: confirm `gofmt -l ./cmd ./internal` and `go mod tidy -diff` produce no output, then run vet, the uncached full suite, and the hot-path benchmarks.

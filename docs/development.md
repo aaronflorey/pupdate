@@ -40,7 +40,7 @@ mise exec -- go test ./... -count=1
 Run a focused test package:
 
 ```bash
-mise exec -- go test ./cmd/pupdate -count=1
+mise exec -- go test ./internal/cli -count=1
 ```
 
 ### Vet
@@ -76,11 +76,17 @@ full suite, then the hot-path benchmarks on both Linux and macOS.
 ## Repository layout
 
 ```
-cmd/pupdate/          # CLI commands and orchestration
+cmd/pupdate/          # Thin executable entrypoint
 internal/
+  cli/                # Cobra commands and orchestration
+  config/             # Config loading and validation
   detection/          # Ecosystem detection
   freshness/          # Freshness evaluation
+  install/            # Manager plans and process execution
+  repolock/           # Repository advisory locking
+  shellhook/          # Shell integration and managed files
   state/              # State file model and storage
+  userenv/            # User environment and path resolution
 docs/                 # This documentation
 .github/workflows/    # CI and release pipelines
 .goreleaser.yaml      # GoReleaser build/release config
@@ -107,7 +113,7 @@ From `CONTRIBUTING.md`:
 
 Tests are colocated with source files (`*_test.go`). The test suite covers:
 
-- **Command behavior:** `cmd/pupdate/*_test.go` — CLI commands, flags, output.
+- **Command behavior:** `internal/cli/*_test.go` — CLI commands, flags, output.
 - **Detection:** `internal/detection/detector_test.go` — definition-backed signals, ecosystem policy diagnostics, scanning, blacklisting.
 - **Freshness:** `internal/freshness/engine_test.go` — hash comparison, git submodule drift, file identity.
 - **State:** `internal/state/model_test.go`, `internal/state/store_test.go` — encode/decode, atomic save.
@@ -118,7 +124,7 @@ Tests are colocated with source files (`*_test.go`). The test suite covers:
 - Place test files next to the source file they test.
 - Use table-driven tests for command/flag combinations.
 - Use `t.TempDir()` for filesystem isolation.
-- The `cmd/pupdate/test_env_test.go` file provides shared test helpers.
+- The `internal/cli/test_env_test.go` file provides shared test helpers.
 - Locking tests must use the repository advisory-lock helpers rather than PID or file-age assumptions.
 - Startup-file tests must use temporary targets and must never touch the developer's real shell configuration.
 

@@ -33,8 +33,12 @@ type DetectionResult struct {
 }
 
 func (r DetectionResult) StateKey() string {
-	if r.Directory == "" || r.Directory == "." {
+	if r.IsRoot() {
 		return string(r.Ecosystem)
 	}
 	return string(r.Ecosystem) + "@" + r.Directory
+}
+
+func (r DetectionResult) IsRoot() bool {
+	return r.Directory == "" || r.Directory == "."
 }
