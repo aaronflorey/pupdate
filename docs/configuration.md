@@ -132,7 +132,7 @@ folder_blacklist:
 
 - **Type:** boolean (pointer — `nil` means "not set")
 - **Default:** `nil` (not set — falls back to the `--quiet` flag default of `false`)
-- **Behavior:** Sets the default quiet mode for `run`. When `true`, no-op output and child command output are suppressed. An explicit `--quiet` or `--quiet=false` flag on the command line always wins.
+- **Behavior:** Sets the default quiet mode for `run`. When `true`, routine status output and child command output are suppressed; failures and config errors still produce one final error. An explicit `--quiet` or `--quiet=false` flag on the command line always wins.
 - **Consumed in:** `internal/cli/run_execution.go` (`resolveRunOptions`).
 
 ### `allow_scripts`

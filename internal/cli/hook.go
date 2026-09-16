@@ -24,7 +24,7 @@ func newHookCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&quiet, "quiet", false, "suppress no-op output and child command output")
+	cmd.Flags().BoolVar(&quiet, "quiet", false, "suppress routine status and child command output")
 	cmd.Flags().BoolVar(&async, "async", false, "launch the hook work in the background")
 	cmd.Flags().BoolVar(&child, "child", false, "run as the detached background hook worker")
 	cmd.Flags().StringVar(&lockFile, "lock-file", "", "legacy background hook lock file path")

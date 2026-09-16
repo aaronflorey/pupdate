@@ -24,7 +24,7 @@ pupdate run [flags]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--quiet` | bool | `false` | Suppress no-op output and child command output. |
+| `--quiet` | bool | `false` | Suppress routine status output and child command output. |
 | `--allow-scripts` | bool | `false` | Allow dependency manager lifecycle scripts where supported, and opt into Python installs that can execute install/build code. |
 | `--dry-run` | bool | `false` | Show what would run without executing installs or saving state. |
 
@@ -58,9 +58,10 @@ The `<target>` in skip lines is the ecosystem name for the root directory (e.g. 
 
 ### `--quiet` behavior
 
-Successful quiet hook workers are fully silent, including successful updates.
-Failures still produce one final error. Manual `run --quiet` continues to show
-its routine `run` and `done` lines while suppressing skip output.
+Successful quiet runs are fully silent, including successful updates, whether
+invoked manually (`pupdate run --quiet`) or as a hook worker. Routine skip, run,
+done, and dry-run lines are suppressed, as is child command output. Failures and
+config errors still produce one final error.
 
 ### Config defaults
 
@@ -168,7 +169,7 @@ pupdate hook [flags]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--quiet` | bool | `false` | Suppress no-op output and child command output. |
+| `--quiet` | bool | `false` | Suppress routine status output and child command output. |
 | `--async` | bool | `false` | Launch the hook work in the background. |
 | `--child` | bool | `false` | Run as the detached background hook worker. |
 | `--lock-file` | string | `""` | Accepted only for compatibility with older child invocations; contents are ignored. |

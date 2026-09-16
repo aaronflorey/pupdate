@@ -119,7 +119,6 @@ func resolveRunOptions(cmd *cobra.Command, config userConfig, quietFlag bool, al
 	if cmd != nil && cmd.Flags().Changed("allow-scripts") {
 		options.AllowScripts = allowScriptsFlag
 	}
-	options.SuppressRoutineStatus = options.Quiet && cmd != nil && cmd.Name() == "hook"
 	return options
 }
 
@@ -195,9 +194,9 @@ func executeRunResult(
 	}
 	plan := action.Plan
 
-	printStatus(cmd, options.SuppressRoutineStatus, formatRunLine(result, plan))
+	printStatus(cmd, options.Quiet, formatRunLine(result, plan))
 	if options.DryRun {
-		printStatus(cmd, options.SuppressRoutineStatus, formatDryRunLine(result, plan))
+		printStatus(cmd, options.Quiet, formatDryRunLine(result, plan))
 		return ecosystemOutcome{
 			StateKey:  result.StateKey(),
 			Succeeded: false,
@@ -206,7 +205,7 @@ func executeRunResult(
 	}
 	err := runInstall(cmd, options.Quiet, filepath.Join(workingDir, result.Directory), deps, plan.Manager, plan.Args...)
 	if err == nil {
-		printStatus(cmd, options.SuppressRoutineStatus, formatDoneLine(result, plan))
+		printStatus(cmd, options.Quiet, formatDoneLine(result, plan))
 	}
 
 	lockfiles, lockfileMetadata, snapshotErr := postInstallLockfileState(cmd.Context(), workingDir, result, decision, err == nil, deps.SnapshotFreshness)

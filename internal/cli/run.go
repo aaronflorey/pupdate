@@ -3,10 +3,9 @@ package cli
 import "github.com/spf13/cobra"
 
 type runOptions struct {
-	Quiet                 bool
-	SuppressRoutineStatus bool
-	AllowScripts          bool
-	DryRun                bool
+	Quiet        bool
+	AllowScripts bool
+	DryRun       bool
 }
 
 func newRunCmd() *cobra.Command {
@@ -29,7 +28,7 @@ PUPDATE_SKIP_INSTALL=1 pupdate run`,
 		},
 		SilenceUsage: true,
 	}
-	cmd.Flags().BoolVar(&quiet, "quiet", false, "suppress no-op output and child command output")
+	cmd.Flags().BoolVar(&quiet, "quiet", false, "suppress routine status and child command output")
 	cmd.Flags().BoolVar(&allowScripts, "allow-scripts", false, "allow dependency manager lifecycle scripts")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would run without executing installs or saving state")
 	return cmd

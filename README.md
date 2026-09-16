@@ -102,9 +102,9 @@ eval "\$(pupdate init --shell fish)"
 ```
 
 The generated hooks run the resolved `pupdate` executable path with `hook --quiet`
-on directory changes, but skip launching from `$HOME`. Quiet hooks suppress
-routine status and child-command output while still reporting install errors,
-so asynchronous updates do not overwrite the live shell prompt.
+on directory changes, but skip launching from `$HOME`. Quiet runs, manual or hook,
+suppress routine status and child-command output while still reporting install
+errors, so asynchronous updates do not overwrite the live shell prompt.
 
 By default, `pupdate init` generates hooks that run `hook --quiet --async`
 in the background using the current executable path. The detached worker,
@@ -158,7 +158,7 @@ restricted to top-level project directories inside configured roots.
 
 Flags:
 
-- `--quiet`: suppress no-op output and child command output
+- `--quiet`: suppress routine status output and child command output
 - `--allow-scripts`: allow dependency manager lifecycle scripts where supported, and opt into Python installs that can execute install/build code
 - `--dry-run`: show what would run without executing installs or saving state
 
@@ -318,9 +318,10 @@ Manual runs use stable, concise stderr prefixes:
 - `pupdate: error: dependency installs failed: <manager> install failed for <target>: <err>`
 - `pupdate: error: operation canceled`
 
-Successful `--quiet` hook runs are fully silent, including successful updates.
-Failures still produce one final error. Repository-derived control characters
-are rendered with quoted ASCII escapes so output cannot forge terminal lines.
+Successful `--quiet` runs, manual or hook, are fully silent, including
+successful updates. Failures still produce one final error. Repository-derived
+control characters are rendered with quoted ASCII escapes so output cannot forge
+terminal lines.
 SIGINT and SIGTERM cancel the active manager, stop later targets, save earlier
 successful outcomes, and release the repository lock. On Linux and macOS,
 cancellation terminates the manager's process group so descendants do not keep

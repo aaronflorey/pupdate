@@ -485,7 +485,7 @@ func TestRunAllowsTopLevelProjectInsideConfiguredRootDirectoriesWithHomeExpansio
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd := newTestRootCmd()
-	cmd.SetArgs([]string{"run", "--quiet"})
+	cmd.SetArgs([]string{"run"})
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 	if err := cmd.Execute(); err != nil {
@@ -493,7 +493,7 @@ func TestRunAllowsTopLevelProjectInsideConfiguredRootDirectoriesWithHomeExpansio
 	}
 
 	if stdout.Len() != 0 {
-		t.Fatalf("expected quiet run to avoid stdout, got %q", stdout.String())
+		t.Fatalf("expected run to avoid stdout, got %q", stdout.String())
 	}
 	if strings.Contains(stderr.String(), "outside configured root_directories") {
 		t.Fatalf("expected configured root to allow project, got %q", stderr.String())
@@ -581,7 +581,7 @@ func TestRunAllowsTopLevelProjectInsideConfiguredRootDirectoriesWhenSetToHomeSho
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd := newTestRootCmd()
-	cmd.SetArgs([]string{"run", "--quiet"})
+	cmd.SetArgs([]string{"run"})
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 	if err := cmd.Execute(); err != nil {
@@ -589,7 +589,7 @@ func TestRunAllowsTopLevelProjectInsideConfiguredRootDirectoriesWhenSetToHomeSho
 	}
 
 	if stdout.Len() != 0 {
-		t.Fatalf("expected quiet run to avoid stdout, got %q", stdout.String())
+		t.Fatalf("expected run to avoid stdout, got %q", stdout.String())
 	}
 	if strings.Contains(stderr.String(), "outside configured root_directories") {
 		t.Fatalf("expected root_directories=[~] to allow project inside home, got %q", stderr.String())
@@ -791,7 +791,7 @@ func TestRunReturnsReadErrorWhenConfigPathIsDirectory(t *testing.T) {
 	assertExecuteCmdShowsErrorWithoutUsage(t, cliCmd, "pupdate: error: failed to read "+configPath)
 }
 
-func TestRunQuietPrintsRunAndDoneWhenUpdateRuns(t *testing.T) {
+func TestRunQuietSuppressesRoutineStatusAndChildOutputWhenUpdateRuns(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFiles(t, dir, "package-lock.json")
 	withChdir(t, dir)
@@ -803,8 +803,10 @@ func TestRunQuietPrintsRunAndDoneWhenUpdateRuns(t *testing.T) {
 	lookPath = func(file string) (string, error) {
 		return file, nil
 	}
+	installCalls := 0
 	execCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "true")
+		installCalls++
+		return exec.CommandContext(ctx, "sh", "-c", "echo child-stdout; echo child-stderr >&2")
 	}
 
 	var stdout bytes.Buffer
@@ -817,14 +819,14 @@ func TestRunQuietPrintsRunAndDoneWhenUpdateRuns(t *testing.T) {
 		t.Fatalf("quiet run command failed: %v", err)
 	}
 
+	if installCalls != 1 {
+		t.Fatalf("expected quiet run to execute the install once, got %d", installCalls)
+	}
 	if stdout.Len() != 0 {
 		t.Fatalf("expected quiet run to avoid stdout, got %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "pupdate: run npm ci --ignore-scripts") {
-		t.Fatalf("expected quiet run line when update executes, got %q", stderr.String())
-	}
-	if !strings.Contains(stderr.String(), "pupdate: done npm") {
-		t.Fatalf("expected quiet completion line when update succeeds, got %q", stderr.String())
+	if stderr.Len() != 0 {
+		t.Fatalf("expected quiet run to suppress routine status and child output, got %q", stderr.String())
 	}
 }
 
@@ -1573,11 +1575,8 @@ func TestRunUsesConfigDefaultsForQuietAndAllowScripts(t *testing.T) {
 	if !slices.Equal(ranArgs, []string{"ci"}) {
 		t.Fatalf("expected config allow_scripts=true to omit --ignore-scripts, got %#v", ranArgs)
 	}
-	if strings.Contains(stderr.String(), "skip ") {
-		t.Fatalf("expected config quiet=true to suppress skip output, got %q", stderr.String())
-	}
-	if !strings.Contains(stderr.String(), "pupdate: run npm ci") {
-		t.Fatalf("expected run line with config defaults, got %q", stderr.String())
+	if stderr.Len() != 0 {
+		t.Fatalf("expected config quiet=true to suppress routine status output, got %q", stderr.String())
 	}
 }
 
