@@ -210,6 +210,7 @@ PUPDATE_SKIP_INSTALL=1 pupdate run
 ## Background hook lock: `.pupdate.hook.lock`
 
 - **Location:** `.pupdate.hook.lock` in the current working directory.
+- **Creation:** Runs and hook workers create it only when project detection finds an item. Empty and excluded folders are skipped before locking. Explicit `reset` operations also acquire the lock.
 - **Format:** Persistent coordination file. Legacy PID or timestamp contents are ignored.
 - **Purpose:** Serializes manual runs, hook workers, and resets in the same repository.
 - **Activity:** On Linux and macOS, activity is determined by a nonblocking OS advisory lock held for the complete mutating operation. The file remains after release.

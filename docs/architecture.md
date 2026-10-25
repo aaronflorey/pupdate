@@ -75,20 +75,21 @@ Manages the `.pupdate` state file.
 ```
 pupdate run
   │
-  ├─ repolock.Acquire()              → nonblocking advisory lock
-  │
-  ├─ collectPreflight()
+  ├─ collectDetectionPreflight()
   │    ├─ config.Loader.Load()        → user + project config in one read each
   │    ├─ resolve/merge config        → user-first traversal union
   │    ├─ collectPreflightSkipReason()
   │    │    ├─ isHomeDirectory()      → skip if $HOME
   │    │    ├─ isOutsideConfiguredRootDirectories()  → skip if outside roots
   │    │    └─ hasPupIgnore()         → skip if .pupignore present
-  │    ├─ Store.Load()                → current state (or empty)
-  │    ├─ detection.DetectWithOptions()  → []DetectionResult
-  │    └─ freshness.EvaluateContext() → []EcosystemDecision
+  │    └─ detection.DetectWithOptions()  → []DetectionResult
   │
   ├─ resolveRunOptions()              → merge config defaults + flags
+  ├─ return if excluded or no projects detected
+  ├─ repolock.Acquire()              → nonblocking advisory lock
+  ├─ collectStatePreflight()
+  │    ├─ Store.Load()                → current state (or empty)
+  │    └─ freshness.EvaluateContext() → []EcosystemDecision
   │
   ├─ executeRunResults()
   │    └─ for each detection result:
@@ -115,8 +116,10 @@ shell cd → hook snippet → pupdate hook --quiet --async
 
   (in background child:)
   pupdate hook --child
-    ├─ repolock.Acquire()             → same lock as run/reset
-    ├─ executeRun()                   → full operation while locked
+    ├─ executeRun()
+    │    ├─ config/exclusions/detection → return if excluded or no projects
+    │    ├─ repolock.Acquire()         → same lock as run/reset
+    │    └─ load state, evaluate freshness, install, save while locked
     └─ release lock; coordination file remains
 ```
 

@@ -22,6 +22,20 @@ func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRu
 	if err != nil {
 		return fmt.Errorf("failed to resolve working directory: %w", err)
 	}
+	preflight, err := collectDetectionPreflight(workingDir, deps)
+	if err != nil {
+		return err
+	}
+	options := resolveRunOptions(cmd, preflight.ResolvedConfig, quietFlag, allowScriptsFlag)
+	options.DryRun = dryRunFlag
+	if skipLine, ok := runSkipStatusLine(preflight.SkipReason); ok {
+		printStatus(cmd, options.Quiet, skipLine)
+		return nil
+	}
+	if len(preflight.Results) == 0 {
+		return nil
+	}
+
 	lock, acquired, err := repolock.Acquire(workingDir)
 	if err != nil {
 		return err
@@ -39,17 +53,9 @@ func executeRun(cmd *cobra.Command, quietFlag bool, allowScriptsFlag bool, dryRu
 		}
 	}()
 
-	preflight, err := collectPreflight(cmd.Context(), workingDir, preflightOptions{}, deps)
+	preflight, err = collectStatePreflight(cmd.Context(), preflight, preflightOptions{}, deps)
 	if err != nil {
 		return err
-	}
-
-	options := resolveRunOptions(cmd, preflight.ResolvedConfig, quietFlag, allowScriptsFlag)
-	options.DryRun = dryRunFlag
-
-	if skipLine, ok := runSkipStatusLine(preflight.SkipReason); ok {
-		printStatus(cmd, options.Quiet, skipLine)
-		return nil
 	}
 
 	for _, warning := range preflight.StateWarnings {

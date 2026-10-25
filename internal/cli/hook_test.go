@@ -135,6 +135,7 @@ func TestRepositoryLockReportsContentionAndPersists(t *testing.T) {
 
 func TestManualRunAndResetFailOnRepositoryLockContention(t *testing.T) {
 	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "package-lock.json")
 	withChdir(t, dir)
 	lock, acquired, err := repolock.Acquire(dir)
 	if err != nil || !acquired {
@@ -156,6 +157,7 @@ func TestManualRunAndResetFailOnRepositoryLockContention(t *testing.T) {
 
 func TestQuietHookSkipsRepositoryLockContention(t *testing.T) {
 	dir := t.TempDir()
+	writeFixtureFiles(t, dir, "package-lock.json")
 	withChdir(t, dir)
 	lock, acquired, err := repolock.Acquire(dir)
 	if err != nil || !acquired {
@@ -215,4 +217,38 @@ func TestHookChildReturnsConfigParseErrorWithoutUsage(t *testing.T) {
 	cmd := newTestRootCmd()
 	cmd.SetArgs([]string{"hook", "--child"})
 	assertExecuteCmdShowsErrorWithoutUsage(t, cmd, "pupdate: error: failed to parse "+configPath)
+}
+
+func TestRunAndHookOnlyCreateLockForDetectedProjects(t *testing.T) {
+	for _, args := range [][]string{{"run", "--quiet"}, {"hook", "--quiet"}, {"hook", "--quiet", "--child"}} {
+		for _, fixture := range []struct {
+			name     string
+			files    []string
+			wantLock bool
+		}{
+			{name: "empty"},
+			{name: "unrelated", files: []string{"notes.txt"}},
+			{name: "ignored", files: []string{".pupignore", "package-lock.json"}},
+			{name: "root project", files: []string{"package-lock.json"}, wantLock: true},
+			{name: "nested project", files: []string{"packages/app/package-lock.json"}, wantLock: true},
+		} {
+			t.Run(strings.Join(args, " ")+"/"+fixture.name, func(t *testing.T) {
+				dir := t.TempDir()
+				withChdir(t, dir)
+				writeFixtureFiles(t, dir, fixture.files...)
+				disableInstall(t)
+				stdout, stderr, err := executeRootCommand(t, args...)
+				if err != nil || stdout != "" || stderr != "" {
+					t.Fatalf("expected silent success: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+				}
+				_, err = os.Stat(repolock.Path(dir))
+				if fixture.wantLock && err != nil {
+					t.Fatalf("expected project lock: %v", err)
+				}
+				if !fixture.wantLock && !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("unexpected lock in folder without projects: %v", err)
+				}
+			})
+		}
+	}
 }

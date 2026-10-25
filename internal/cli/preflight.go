@@ -46,6 +46,14 @@ type preflightResult struct {
 }
 
 func collectPreflight(ctx context.Context, workingDirectory string, options preflightOptions, deps dependencies) (preflightResult, error) {
+	result, err := collectDetectionPreflight(workingDirectory, deps)
+	if err != nil {
+		return preflightResult{}, err
+	}
+	return collectStatePreflight(ctx, result, options, deps)
+}
+
+func collectDetectionPreflight(workingDirectory string, deps dependencies) (preflightResult, error) {
 	configSnapshot, err := deps.ConfigLoader.Load(workingDirectory)
 	if err != nil {
 		return preflightResult{}, err
@@ -76,18 +84,6 @@ func collectPreflight(ctx context.Context, workingDirectory string, options pref
 	}
 	result.SkipReason = skipReason
 
-	if skipReason != preflightSkipNone && !options.LoadStateOnSkip {
-		return result, nil
-	}
-
-	loadedState, err := result.Store.Load()
-	if err != nil {
-		return preflightResult{}, fmt.Errorf("failed to load state: %w", err)
-	}
-	result.CurrentState = loadedState.State
-	result.StateWarnings = loadedState.Warnings
-	result.StateExists = loadedState.Exists
-
 	if skipReason != preflightSkipNone {
 		return result, nil
 	}
@@ -101,7 +97,27 @@ func collectPreflight(ctx context.Context, workingDirectory string, options pref
 	}
 	result.Results = results
 
-	decisions, err := deps.EvaluateFreshness(ctx, workingDirectory, results, loadedState.State)
+	return result, nil
+}
+
+func collectStatePreflight(ctx context.Context, result preflightResult, options preflightOptions, deps dependencies) (preflightResult, error) {
+	if result.SkipReason != preflightSkipNone && !options.LoadStateOnSkip {
+		return result, nil
+	}
+
+	loadedState, err := result.Store.Load()
+	if err != nil {
+		return preflightResult{}, fmt.Errorf("failed to load state: %w", err)
+	}
+	result.CurrentState = loadedState.State
+	result.StateWarnings = loadedState.Warnings
+	result.StateExists = loadedState.Exists
+
+	if result.SkipReason != preflightSkipNone {
+		return result, nil
+	}
+
+	decisions, err := deps.EvaluateFreshness(ctx, result.WorkingDirectory, result.Results, loadedState.State)
 	if err != nil {
 		return preflightResult{}, fmt.Errorf("failed to evaluate dependency freshness: %w", err)
 	}

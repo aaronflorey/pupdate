@@ -109,7 +109,9 @@ errors, so asynchronous updates do not overwrite the live shell prompt.
 By default, `pupdate init` generates hooks that run `hook --quiet --async`
 in the background using the current executable path. The detached worker,
 manual runs, and resets use the same nonblocking repository advisory lock.
-`.pupdate.hook.lock` remains in place; lock ownership, not file contents or age,
+Runs and hook workers create `.pupdate.hook.lock` only after detecting a supported
+project; empty and excluded folders do not get a lock file. Once created, it
+remains in place; lock ownership, not file contents or age,
 determines whether work is active.
 
 Both `.pupdate` and `.pupdate.hook.lock` are generated local-machine state files.
