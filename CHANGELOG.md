@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.0](https://github.com/aaronflorey/pupdate/compare/v0.8.1...v0.9.0) (2026-11-06)
+
+
+### Features
+
+* harden updates and add managed shell hooks ([47eccd5](https://github.com/aaronflorey/pupdate/commit/47eccd58d967e2d01df38c0f2580992dd5d051d4))
+* restructure the project ([a316cf9](https://github.com/aaronflorey/pupdate/commit/a316cf93120b0fef6dd68ffeb4db653bf76c29e8))
+
+
+### Bug Fixes
+
+* **cli:** create repository lock only for detected projects ([88b2e6a](https://github.com/aaronflorey/pupdate/commit/88b2e6ab213924a4e59109294a9c3e21bbcb41e9))
+* detach background hook child from terminal to prevent shell hang ([9256a30](https://github.com/aaronflorey/pupdate/commit/9256a3050c1238d438126615cb9357664d6758f3))
+* keep quiet runs silent ([4a5519f](https://github.com/aaronflorey/pupdate/commit/4a5519f632544b65e9853be1afb7b0dca8c4a9ae))
+* refactor signal detection registry ([3044bb6](https://github.com/aaronflorey/pupdate/commit/3044bb65e938d90461c139dedbb82aea63ee0fdb))
+* suppress quiet hook routine status ([c542ad7](https://github.com/aaronflorey/pupdate/commit/c542ad735a15b9bd7616f2d94eaa52bc0012687e))
+* update docs for shell detection and Go toolchain usage ([01ecc7a](https://github.com/aaronflorey/pupdate/commit/01ecc7a641b038104bacf565849289103e0571ae))
+
 ## [0.8.1](https://github.com/aaronflorey/pupdate/compare/v0.8.0...v0.8.1) (2026-07-08)
 
 
